@@ -14,12 +14,10 @@ PREPROCESSED_DATA_PATH = ''
 
 '''股市环境参数'''
 INITIAL_BALANCE = 0             # 初始资金
-STOCK_DIM = 10                   # 股票个数
 SHARES_PER_TRADE = 0            # 每笔交易股数单位（因数）
 TRANSACTION_FEE_PERCENTAGE = 0  # 交易费率（百分比）
 
 def read_config():
-    print('READ CONFIG')
     conf = configparser.ConfigParser()
     conf.read('./config/config.ini', encoding='utf-8')
 
@@ -34,10 +32,8 @@ def read_config():
     STOCK_DATA_PATH = conf.get('path', 'stock_data')
     PREPROCESSED_DATA_PATH = conf.get('path', 'preprocessed_stock_data')
 
-    global INITIAL_BALANCE, STOCK_DIM, TRANSACTION_FEE_PERCENTAGE, SHARES_PER_TRADE
+    global INITIAL_BALANCE, TRANSACTION_FEE_PERCENTAGE, SHARES_PER_TRADE
     INITIAL_BALANCE = int(conf.get('stock_env', 'initial_balance'))
-    STOCK_DIM = int(conf.get('stock_env', 'stock_dim'))
-    print('READ STOCK DIM', STOCK_DIM)
     SHARES_PER_TRADE = int(conf.get('stock_env', 'shares_per_trade'))
     TRANSACTION_FEE_PERCENTAGE = float(conf.get('stock_env', 'transaction_fee_percentage'))
 

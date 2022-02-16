@@ -98,3 +98,13 @@ def get_stock_codes(data: pd.DataFrame) -> List[str]:
     :param data: 原始数据
     """
     return list(data['ts_code'].unique())
+
+
+def remove_anomaly(data: pd.DataFrame) -> pd.DataFrame:
+    """茅台600519.SH，片仔癀600436.SH和山西汾酒600809.SH三只股票近10年涨幅过高，此函数从原数据中去除这三只股票的数据。
+
+    :param data: 原始数据
+    """
+    return data[(data['ts_code'] != '600519.SH')
+               & (data['ts_code'] != '600436.SH')
+               & (data['ts_code'] != '600809.SH')]

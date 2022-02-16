@@ -1,8 +1,9 @@
 import global_var
 from preprocessor import *
-
+from agents import *
 
 if __name__ == '__main__':
+    global_var.init()
 
     if global_var.VERBOSE:
         print('Main:', 'logging mode set to verbose.')
@@ -19,12 +20,13 @@ if __name__ == '__main__':
         if global_var.VERBOSE:
             print('Main:', 'stock data preprocessing complete and saved.')
 
-    print(preprocessed_stock_data.head())
-    print('===========================================')
-    # print(subdata_by_ndays(preprocessed_stock_data, 10))
+    run_agent(remove_anomaly(preprocessed_stock_data))
+    # print(preprocessed_stock_data.head())
     # print('===========================================')
-    # print(subdata_by_ndays(preprocessed_stock_data, 5, 20201105))
+    # # print(subdata_by_ndays(preprocessed_stock_data, 10))
+    # # print('===========================================')
+    # # print(subdata_by_ndays(preprocessed_stock_data, 5, 20201105))
+    # # print('===========================================')
+    # print(subdata_by_range(preprocessed_stock_data, 20150101, 20150110))
     # print('===========================================')
-    print(subdata_by_range(preprocessed_stock_data, 20150101, 20150110))
-    print('===========================================')
-    print(to_daily_data(data=subdata_by_ndays(preprocessed_stock_data, 10)))
+    # print(to_daily_data(data=subdata_by_ndays(preprocessed_stock_data, 10)))
