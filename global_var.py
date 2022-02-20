@@ -16,6 +16,7 @@ PREPROCESSED_DATA_PATH = ''
 INITIAL_BALANCE = 0             # 初始资金
 SHARES_PER_TRADE = 0            # 每笔交易股数单位（因数）
 TRANSACTION_FEE_PERCENTAGE = 0  # 交易费率（百分比）
+REWARD_SCALING = 0              # 每步reward较大，乘以该值进行缩放
 
 def read_config():
     conf = configparser.ConfigParser()
@@ -32,10 +33,11 @@ def read_config():
     STOCK_DATA_PATH = conf.get('path', 'stock_data')
     PREPROCESSED_DATA_PATH = conf.get('path', 'preprocessed_stock_data')
 
-    global INITIAL_BALANCE, TRANSACTION_FEE_PERCENTAGE, SHARES_PER_TRADE
+    global INITIAL_BALANCE, TRANSACTION_FEE_PERCENTAGE, SHARES_PER_TRADE, REWARD_SCALING
     INITIAL_BALANCE = int(conf.get('stock_env', 'initial_balance'))
     SHARES_PER_TRADE = int(conf.get('stock_env', 'shares_per_trade'))
     TRANSACTION_FEE_PERCENTAGE = float(conf.get('stock_env', 'transaction_fee_percentage'))
+    REWARD_SCALING = float(conf.get('stock_env', 'reward_scaling'))
 
 def init():
     read_config()

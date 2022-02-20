@@ -18,7 +18,7 @@ class StockTrainEnvV1(gym.Env):
         super(StockTrainEnvV1, self).__init__()
 
         self.verbose = verbose
-        self.log_trade = verbose
+        self.log_trade = False
 
         # stock_codes 必须与 daily_data 中股票的顺序对应
         self.stock_codes = stock_codes
@@ -46,8 +46,9 @@ class StockTrainEnvV1(gym.Env):
             # print('StockTrainEnvV1:', 'episode ended, asset:', self.state[0] + sum(
             #     [shares*price for shares, price in zip(self.state[1 : self.stock_dim+1],
             #                                            self.state[self.stock_dim+1 : 2*self.stock_dim+1])]))
+            #save_result(self.dates, self.asset_memory, self.reward_memory, self.verbose)
             pass
-            # save_result(self.dates, self.asset_memory, self.reward_memory, False)
+
         else:
             action = action * global_var.SHARES_PER_TRADE
 
@@ -97,6 +98,8 @@ class StockTrainEnvV1(gym.Env):
                 print('StockTrainEnvV1:', 'after trade, state:', self.state)
                 print('StockTrainEnvV1:', 'after trade, total asset:', end_total_asset)
                 print('StockTrainEnvV1:', 'reward:', self.reward)
+
+            self.reward *= global_var.REWARD_SCALING
 
         return np.array(self.state), self.reward, self.done, {}
 
@@ -171,23 +174,36 @@ def save_result(dates, assets, rewards, verbose):
     x = [datetime.strptime(str(d), '%Y%m%d').date() for d in dates]
     del x[-1]
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
-    interval = np.clip(len(dates) // 100, 1, 120)
+    interval = np.clip(len(dates) // 10, 1, 120)
+    if verbose:
+        print('StockTrainEnvV1:', f'interval {interval}')
     plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=interval))
     plt.plot(x, [a[-1] for a in assets])  # assets每项中最后一个值是余额+持股价值的总资产
-    # plt.plot(x, rewards)
     plt.gcf().autofmt_xdate()
-    plt.savefig('./figs/simulation/test.png')
+    plt.savefig('./figs/simulation/PPO_1M_total_asset.png')
+    plt.close()
+
+    plt.figure(figsize=(18, 6))
+    plt.margins(x=0.02)
+    x = [datetime.strptime(str(d), '%Y%m%d').date() for d in dates]
+    del x[-1]
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
+    plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=interval))
+    plt.plot(x, rewards)
+    plt.gcf().autofmt_xdate()
+    plt.savefig('./figs/simulation/PPO_1M_reward.png')
     plt.close()
     # plt.show()
 
 
 if __name__ == '__main__':
-    from stable_baselines3.common.env_checker import check_env
-    from preprocessor import *
-
-    data = pd.read_csv('../data/szstock_20_preprocessed.csv')
-    data = subdata_by_ndays(data, 10)
-    stock_codes = get_stock_codes(data)
-    data = to_daily_data(data)
-    env = StockTrainEnvV1(data, stock_codes)
-    check_env(env, warn=True)
+    pass
+    # from stable_baselines3.common.env_checker import check_env
+    # from preprocessor import *
+    #
+    # data = pd.read_csv('../data/szstock_20_preprocessed.csv')
+    # data = subdata_by_ndays(data, 10)
+    # stock_codes = get_stock_codes(data)
+    # data = to_daily_data(data)
+    # env = StockTrainEnvV1(data, stock_codes)
+    # check_env(env, warn=True)
