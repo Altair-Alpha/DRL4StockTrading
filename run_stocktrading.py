@@ -1,8 +1,10 @@
+import time
 import global_var
 from preprocessor import *
 from agents import *
 
 if __name__ == '__main__':
+    start_time = time.time()
     global_var.init()
 
     if global_var.VERBOSE:
@@ -20,7 +22,11 @@ if __name__ == '__main__':
         if global_var.VERBOSE:
             print('Main:', 'stock data preprocessing complete and saved.')
 
-    run_agent(remove_anomaly(preprocessed_stock_data))
+    run_agent_test(remove_anomaly(preprocessed_stock_data))
+    # run_agent_keep_train(remove_anomaly(preprocessed_stock_data))
+    end_time = time.time()
+    if global_var.VERBOSE:
+        print('Main:', 'total time elapsed: {:.2f} minutes'.format((end_time - start_time) / 60))
     # print(preprocessed_stock_data.head())
     # print('===========================================')
     # # print(subdata_by_ndays(preprocessed_stock_data, 10))
