@@ -5,7 +5,68 @@ import matplotlib.dates as mdates
 
 from preprocessor import *
 
-plt.style.use('seaborn')
+
+def plot_daily(x: list, y: list, path: str):
+    """绘制每日数据的辅助函数。
+
+    :param x: 横轴数据，应为日期的列表
+    :param y: 纵轴数据，任意绘制数据的列表
+    :param path: 图像保存路径
+    """
+    # plt.style.use('seaborn')
+    plt.figure(figsize=(30, 10))
+    plt.rc('font', size=18)
+    plt.margins(x=0.02)
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
+    interval = np.clip(len(x) // 10, 1, 120) # 调整横轴日期间距，避免过挤
+    plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=interval))
+    plt.plot(x, y, linewidth=3, color='blue')
+    plt.gcf().autofmt_xdate()
+    plt.savefig(path)
+    plt.close()
+
+def plot_daily_compare(x: list, y1: list, y2: list, diff_y_scale: bool, path:str, label_y1: str, label_y2: str = 'baseline'):
+    if len(y2) == 0:
+        data = subdata_by_range(read_data(), 20180101, 20211231)
+        y2 = calc_daily_mean(data)[:-1]
+
+    # plt.style.use('seaborn')
+    plt.figure(figsize=(30, 10))
+    plt.rc('font', size=18)
+    plt.rc('legend', fontsize=20, handlelength=3, edgecolor='black')
+    plt.margins(x=0.02)
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
+    interval = np.clip(len(x) // 10, 1, 120)  # 调整横轴日期间距，避免过挤
+    plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=interval))
+
+    if diff_y_scale:
+        ax1 = plt.gca()
+        ax1.set_ylabel(label_y1, color='red', fontsize=16)
+        ax1.plot(x, y1, linewidth=3, color='red')
+
+        ax2 = ax1.twinx()
+        ax2.set_ylabel(label_y2, color='blue', fontsize=16)
+        ax2.plot(x, y2, linewidth=3, color='blue')
+    else:
+        plt.plot(x, y1, linewidth=3, color='red', label=label_y1)
+        plt.plot(x, y2, linewidth=3, color='blue', label=label_y2)
+        plt.legend(loc='upper left')
+
+    plt.gcf().autofmt_xdate()
+    plt.savefig(path)
+    plt.close()
+
+
+def read_data():
+    """仅测试用"""
+    import configparser
+    conf = configparser.ConfigParser()
+    conf.read('./config/config.ini', encoding='utf-8')
+    STOCK_DATA_PATH = conf.get('path', 'preprocessed_stock_data')
+    stock_data = pd.read_csv(STOCK_DATA_PATH, index_col=0)
+    stock_data = remove_anomaly(stock_data)
+    return stock_data
+
 
 def draw_stock_price(stock_data: pd.DataFrame):
     # 横轴为交易日期（所有股票统一）
@@ -39,22 +100,14 @@ def draw_stock_price(stock_data: pd.DataFrame):
     plt.close()
 
 
-def calc_daily_mean(data: pd.DataFrame) -> pd.DataFrame:
+def calc_daily_mean(data: pd.DataFrame) -> list:
+    # daily_data = to_daily_data(data)
+    # mean_data = pd.DataFrame(columns=['mean'])
+    # for k, v in daily_data.items():
+    #     mean_data.loc[k] = v['close'].mean()
+    # return mean_data
+    mean_data = []
     daily_data = to_daily_data(data)
-    mean_data = pd.DataFrame(columns=['mean'])
-    for k, v in daily_data.items():
-        mean_data.loc[k] = v['close'].mean()
+    for v in daily_data.values():
+        mean_data.append(v['close'].mean())
     return mean_data
-
-if __name__ == '__main__':
-    import configparser
-    conf = configparser.ConfigParser()
-    conf.read('./config/config.ini', encoding='utf-8')
-    STOCK_DATA_PATH = conf.get('path', 'stock_data')
-    stock_data = pd.read_csv(STOCK_DATA_PATH, index_col=0)
-    stock_data = remove_anomaly(stock_data)
-    #draw_stock_price(remove_anomaly(stock_data))
-    mean_data = calc_daily_mean(stock_data)
-
-    data1, data2 = mean_data.loc[20190110]['mean'], mean_data.loc[20211231]['mean']
-    print('20180102 {:.2f} 20211231 {:.2f} rate {:.2f}%'.format(data1, data2, (data2-data1) / data1 * 100))

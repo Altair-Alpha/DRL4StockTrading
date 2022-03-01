@@ -22,11 +22,13 @@ if __name__ == '__main__':
         if global_var.VERBOSE:
             print('Main:', 'stock data preprocessing complete and saved.')
 
-    run_agent_test(remove_anomaly(preprocessed_stock_data))
+    #run_agent_test(remove_anomaly(preprocessed_stock_data))
     # run_agent_keep_train(remove_anomaly(preprocessed_stock_data))
     end_time = time.time()
-    if global_var.VERBOSE:
-        print('Main:', 'total time elapsed: {:.2f} minutes'.format((end_time - start_time) / 60))
+    eval_agent(remove_anomaly(preprocessed_stock_data))
+    # if global_var.VERBOSE:
+    #     print('Main:', 'total time elapsed: {:.2f} minutes'.format((end_time - start_time) / 60))
+
     # print(preprocessed_stock_data.head())
     # print('===========================================')
     # # print(subdata_by_ndays(preprocessed_stock_data, 10))

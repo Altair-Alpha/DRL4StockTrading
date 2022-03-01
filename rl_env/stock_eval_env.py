@@ -8,14 +8,14 @@ import gym
 from gym import spaces
 
 import global_var
+from util import *
 
-
-class StockTrainEnv(gym.Env):
+class StockEvalEnv(gym.Env):
     """符合OpenAI Gym接口的模拟股市环境"""
     metadata = {'render.modes': ['human']}
 
     def __init__(self, daily_data: Dict[int, pd.DataFrame], stock_codes: List[str], verbose: bool = True):
-        super(StockTrainEnv, self).__init__()
+        super(StockEvalEnv, self).__init__()
 
         self.verbose = verbose
         self.log_trade = False
@@ -40,6 +40,13 @@ class StockTrainEnv(gym.Env):
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(1 + 6 * self.stock_dim,))
 
     def step(self, action: np.ndarray):
+        ###TEST###
+        # if self.cur_date > 20200701 and self.cur_date < 20200810:
+        #     self.verbose = True
+        # else:
+        #     self.verbose = False
+        ##########
+
         self.done = (self.cur_date == self.last_date)
         self.reward = 0  # 清零，否则最后一个step会重复返回上一个step的reward
         if self.done:
@@ -164,36 +171,17 @@ class StockTrainEnv(gym.Env):
                       'type: sell', f'vol: {real_volume}', f'amount: {amount}')
                 print('StockTrainEnvV1:', f'balance increase from {prev_balance} to {self.state[0]}')
 
+    def save_result(self, asset_graph_path: str, reward_graph_path: str):
+        if self.verbose:
+            print('StockTrainEnvV1:', 'saving results.')
 
-def save_result(dates, assets, rewards, verbose):
-    if verbose:
-        print('StockTrainEnvV1:', 'saving results.')
-    # 绘制资产变化图
-    plt.figure(figsize=(18, 6))
-    plt.margins(x=0.02)
-    x = [datetime.strptime(str(d), '%Y%m%d').date() for d in dates]
-    del x[-1]
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
-    interval = np.clip(len(dates) // 10, 1, 120)
-    if verbose:
-        print('StockTrainEnvV1:', f'interval {interval}')
-    plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=interval))
-    plt.plot(x, [a[-1] for a in assets])  # assets每项中最后一个值是余额+持股价值的总资产
-    plt.gcf().autofmt_xdate()
-    plt.savefig('./figs/simulation/PPO_1M_total_asset.png')
-    plt.close()
+        x = [datetime.strptime(str(d), '%Y%m%d').date() for d in self.dates]
+        del x[-1]
+        assets = [a[-1] for a in self.asset_memory] # asset每项中最后一个数是余额+持股价值的总资产
+        rewards = self.reward_memory
 
-    plt.figure(figsize=(18, 6))
-    plt.margins(x=0.02)
-    x = [datetime.strptime(str(d), '%Y%m%d').date() for d in dates]
-    del x[-1]
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
-    plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=interval))
-    plt.plot(x, rewards)
-    plt.gcf().autofmt_xdate()
-    plt.savefig('./figs/simulation/PPO_1M_reward.png')
-    plt.close()
-    # plt.show()
+        plot_daily(x, assets, asset_graph_path)     # 绘制每日资产变化图
+        plot_daily(x, rewards, reward_graph_path)    # 绘制每日收益图
 
 
 if __name__ == '__main__':
