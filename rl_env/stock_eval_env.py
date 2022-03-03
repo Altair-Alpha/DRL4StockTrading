@@ -1,3 +1,4 @@
+import math
 from typing import List, Dict
 import numpy as np
 import pandas as pd
@@ -58,6 +59,7 @@ class StockEvalEnv(gym.Env):
 
         else:
             action = action * global_var.SHARES_PER_TRADE
+            self.action_memory.append(action)
 
             # 总资产为：余额 + 每只股票持股 * 当前日期股价
             begin_total_asset = self.state[0] + sum(
@@ -125,8 +127,9 @@ class StockEvalEnv(gym.Env):
                      + self.data[self.cur_date]['rsi'].tolist()
         if self.verbose:
             print('StockTrainEnvV1:', 'reset:', 'init state', self.state)
-        self.asset_memory = []  # 记录历史每步资产状态：资金+持股+总资产（前两项合起来）
-        self.reward_memory = []  # 记录历史每步收益
+        self.asset_memory = []      # 记录历史每步资产状态：资金+持股+总资产（前两项合起来）
+        self.action_memory = []     # 记录历史每步动作（外部传入）
+        self.reward_memory = []     # 记录历史每步收益
 
         self.trade_count = 0
         return np.array(self.state)
@@ -183,6 +186,26 @@ class StockEvalEnv(gym.Env):
         plot_daily(x, assets, asset_graph_path)     # 绘制每日资产变化图
         plot_daily(x, rewards, reward_graph_path)    # 绘制每日收益图
 
+    def dump_memory(self, path: str):
+        stock_hold_df = pd.DataFrame([x[1:self.stock_dim+1] for x in self.asset_memory], columns=self.stock_codes, index=self.dates[:-1])
+        stock_hold_df.T.to_csv(path + '/stock_hold_memory.csv') # 为适配图表制作，进行转置
+
+        asset_dist = []
+        for i, d in enumerate(self.dates[:-1]):
+            # 持股与股价列表相乘
+            # 资产第0项是余额，股价列表前补1；资产最后一项是总金额，不需要，去除
+            asset_dist.append([hold*price for hold, price in zip(self.asset_memory[i][:-1], [1] + self.data[d]['close'].tolist())])
+            # 验证
+            if not math.isclose(sum(asset_dist[i]), self.asset_memory[i][-1]):
+                print('NOT EQUAL!!', sum(asset_dist[i]), self.asset_memory[i][-1])
+                return
+        asset_dist_df = pd.DataFrame(asset_dist, columns=['balance'] + self.stock_codes, index=self.dates[:-1])
+        asset_dist_df.T.to_csv(path + '/asset_distribution_memory.csv')
+
+        reward_memory_df = pd.DataFrame(self.reward_memory, columns=['reward'], index=self.dates[:-1])
+        reward_memory_df.to_csv(path + '/reward_memory.csv')
+        action_meomory_df = pd.DataFrame(self.action_memory, columns=self.stock_codes, index=self.dates[:-1])
+        action_meomory_df.to_csv(path + '/action_memory.csv')
 
 if __name__ == '__main__':
     pass

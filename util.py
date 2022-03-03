@@ -68,8 +68,11 @@ def read_data():
     return stock_data
 
 
-def draw_stock_price(stock_data: pd.DataFrame):
+def draw_avg_stock_price(stock_data: pd.DataFrame, eval_period_only: bool = True):
+    if eval_period_only:
+        stock_data = subdata_by_range(stock_data, 20180101, 20211231)
     # 横轴为交易日期（所有股票统一）
+
     x = [datetime.strptime(str(d), '%Y%m%d').date() for d in stock_data['trade_date'].unique()]
 
     # stock_data_dict = dict(tuple(stock_data.groupby('ts_code')))
@@ -84,19 +87,18 @@ def draw_stock_price(stock_data: pd.DataFrame):
     #     plt.close()
 
     y = []
-    stock_data_dict = to_daily_data(stock_data[(stock_data['ts_code'] != '600519.SH')
-                                                            & (stock_data['ts_code'] != '600436.SH')
-                                                            & (stock_data['ts_code'] != '600809.SH')])
+    stock_data_dict = to_daily_data(stock_data)
 
     for k, v in stock_data_dict.items():
         y.append(v['close'].mean())
-    plt.figure(figsize=(18, 6))
+    plt.figure(figsize=(30, 10))
+    plt.rc('font', size=18)
     plt.margins(x=0.02)
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
     plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=120))
-    plt.plot(x, y)
+    plt.plot(x, y, linewidth=3, color='blue')
     plt.gcf().autofmt_xdate()
-    plt.savefig('./figs/stock_price/avg20_noanomaly.png')
+    plt.savefig('./figs/stock_price/avg20_2018-2021_noanomaly.png')
     plt.close()
 
 
@@ -111,3 +113,9 @@ def calc_daily_mean(data: pd.DataFrame) -> list:
     for v in daily_data.values():
         mean_data.append(v['close'].mean())
     return mean_data
+
+
+if __name__ == '__main__':
+    l = [346939.79, 364304.25, 224077.53, 553994.91, 385011.51, 672975.81, 383956.12, 374734.04, 547615.06, 721823.17]\
+        + [661139.10, 389922.04, 415811.65, 191674.56, 153699.03, 155645.90, 372851.19, 220504.27, 304572.08, 229018.38]
+    print('mean', np.mean(l), 'std', np.std(l))

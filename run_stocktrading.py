@@ -1,5 +1,6 @@
 import time
 import global_var
+import util
 from preprocessor import *
 from agents import *
 
@@ -24,8 +25,11 @@ if __name__ == '__main__':
 
     #run_agent_test(remove_anomaly(preprocessed_stock_data))
     # run_agent_keep_train(remove_anomaly(preprocessed_stock_data))
-    end_time = time.time()
-    eval_agent(remove_anomaly(preprocessed_stock_data))
+    # end_time = time.time()
+    # eval_agent(remove_anomaly(preprocessed_stock_data))
+    run_agent_test(remove_anomaly(preprocessed_stock_data))
+    # util.draw_avg_stock_price(remove_anomaly(preprocessed_stock_data))
+
     # if global_var.VERBOSE:
     #     print('Main:', 'total time elapsed: {:.2f} minutes'.format((end_time - start_time) / 60))
 
