@@ -1,28 +1,42 @@
 import time
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import gym
-from stable_baselines3 import PPO
-from stable_baselines3 import DDPG
+from stable_baselines3 import A2C, PPO
+from stable_baselines3 import DDPG, TD3
+from stable_baselines3.common.noise import NormalActionNoise
+from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize, VecMonitor
+from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.env_util import make_vec_env
 
 import global_var
 import util
 from preprocessor import *
-from stock_train_env import StockTrainEnv
-from stock_eval_env import StockEvalEnv
+# from stock_train_env import StockTrainEnv
+# from stock_eval_env import StockEvalEnv
+from stock_train_env_v2 import StockTrainEnvV2
+from stock_eval_env_v2 import StockEvalEnvV2
 
 
-def run_agent(data: pd.DataFrame = None, model: str = 'DDPG', episode: int = 20):
+def run_agent(data: pd.DataFrame = None, model: str = 'TD3', episode: int = 2):
     stock_codes = get_stock_codes(data)
     data_train = subdata_by_range(data, 20100101, 20171231)
     data_train = to_daily_data(data_train)
-    # env_train = StockTrainEnvV1(data_train, stock_codes, verbose=False)
 
     # env_train = make_vec_env(StockTrainEnv, n_envs=4,
     #                          env_kwargs={'daily_data': data_train, 'stock_codes': stock_codes, 'verbose': False})
+    # model_path = f'./models/0305_A2C_500K_10_Train/'
+    # os.makedirs(model_path, exist_ok=True)
+
+    # env_train = VecMonitor(VecNormalize(DummyVecEnv([lambda: StockTrainEnvV2(data_train, stock_codes, False)])), './models/TD3_log')
+    env_train = Monitor(StockTrainEnvV2(data_train, stock_codes, False), './models/TD3_log')
+
+    # env_train = make_vec_env(StockTrainEnvV2, n_envs=4, env_kwargs={'daily_data': data_train, 'stock_codes': stock_codes, 'verbose': False},
+    #                          monitor_dir='./models/TD3_log')
     # DDPG不支持多环境
-    env_train = StockTrainEnv(data_train, stock_codes, False)
+    #
 
     agent = agent_factory(model, env_train)
     if global_var.VERBOSE:
@@ -30,13 +44,14 @@ def run_agent(data: pd.DataFrame = None, model: str = 'DDPG', episode: int = 20)
 
     train_start_time = time.time()
     agent.learn(timesteps=25000)
-    # agent.save('./models/PPO_250K_2018')
+    agent.save('./models/TD3_10K')
     # agent.load('./models/PPO_1M')
     train_end_time = time.time()
+    util.plot_results('./models/TD3_log', './models/TD3_log/lerning_curve.png')
 
     data_eval = subdata_by_range(data, 20180101, 20211231)
     data_eval = to_daily_data(data_eval)
-    env_eval = StockEvalEnv(data_eval, stock_codes, verbose=False)
+    env_eval = StockEvalEnvV2(data_eval, stock_codes, verbose=False)
 
     returns = []
     for i in range(episode):
@@ -62,7 +77,7 @@ def run_agent(data: pd.DataFrame = None, model: str = 'DDPG', episode: int = 20)
     print('Agent:', 'model training time {:.2f} minutes'.format((train_end_time - train_start_time) / 60))
 
 
-def run_agent_test(data: pd.DataFrame = None, model: str = 'DDPG', episode: int = 1):
+def run_agent_test(data: pd.DataFrame = None, model: str = 'A2C', n_train: int = 10, episode: int = 10):
     if global_var.VERBOSE:
         print('Agent:', f'test version. using {model} agent.')
         print('reward scale', global_var.REWARD_SCALING)
@@ -73,21 +88,32 @@ def run_agent_test(data: pd.DataFrame = None, model: str = 'DDPG', episode: int 
     data_eval = to_daily_data(data_eval)
     returns = []
     train_times = []
-    for e in range(10):
-        env_train = StockTrainEnv(data_train, stock_codes, verbose=False)
-        # env_train = make_vec_env(StockTrainEnv, n_envs=4,
-        #                          env_kwargs={'daily_data': data_train, 'stock_codes': stock_codes, 'verbose': False})
+
+    model_path = f'./models/EnvV2/A2C/0308_A2C_1M_10_Train/'
+    os.makedirs(model_path, exist_ok=True)
+    for e in range(n_train):
+        # env_train = StockTrainEnv(data_train, stock_codes, verbose=False)
+
+        log_path = model_path + f'logs/{e+1}/'
+        os.makedirs(log_path, exist_ok=True)
+        # env_train = Monitor(env_train, log_path)
+
+        env_train = make_vec_env(StockTrainEnvV2, n_envs=4,
+                                 env_kwargs={'daily_data': data_train, 'stock_codes': stock_codes, 'verbose': False}#)
+                                 ,monitor_dir=log_path)
         # data_full = subdata_by_range(data, 20190101, 20211231)
         # data_full = to_daily_data(data_full)
         # env_full = StockTrainEnvV1(data_full, stock_codes, verbose=False)
 
         agent = agent_factory(model, env_train)
         train_start_time = time.time()
-        agent.learn(timesteps=100000)
+        agent.learn(timesteps=1000000)
         train_end_time = time.time()
-        # agent.save(f'./models/0303_PPO_1M_RS1e-3_10_Train/{e}')
+        agent.save(model_path + f'{e+1}')
+        util.plot_results(log_path, log_path + 'learning_curve.png')
         train_times.append((train_end_time - train_start_time) / 60)
-        env_eval = StockEvalEnv(data_eval, stock_codes, verbose=False)
+
+        env_eval = StockEvalEnvV2(data_eval, stock_codes, verbose=False)
 
         ret = 0
         for i in range(episode):
@@ -114,28 +140,24 @@ def run_agent_test(data: pd.DataFrame = None, model: str = 'DDPG', episode: int 
     print('Agent:', 'average model training time: {:.2f} minutes'.format(np.mean(train_times)))
 
 
-def hold_agent_test(data: pd.DataFrame = None, model: str = 'Hold', episode: int = 20):
+def eval_agent_train(data: pd.DataFrame = None, model: str = 'Hold', episode: int = 1):
     if global_var.VERBOSE:
-        print('Agent:', f'test version. using {model} agent.')
+        print('Agent:', f'evaluating {model} agent on training period(20100101-20171231).')
     stock_codes = get_stock_codes(data)
     data_train = subdata_by_range(data, 20100101, 20171231)
     data_train = to_daily_data(data_train)
-    data_eval = subdata_by_range(data, 20180101, 20211231)
+    data_eval = subdata_by_range(data, 20100101, 20171231)
     data_eval = to_daily_data(data_eval)
     returns = []
-    train_times = []
+
     for e in range(10):
-        env_train = StockTrainEnv(data_train, stock_codes, verbose=False)
         # data_full = subdata_by_range(data, 20190101, 20211231)
         # data_full = to_daily_data(data_full)
         # env_full = StockTrainEnvV1(data_full, stock_codes, verbose=False)
 
-        agent = agent_factory(model, env_train)
-        train_start_time = time.time()
-        agent.learn(timesteps=1000000)
-        train_end_time = time.time()
-        train_times.append((train_end_time - train_start_time) / 60)
-        env_eval = StockTrainEnv(data_eval, stock_codes, verbose=False)
+        env_eval = StockEvalEnvV2(data_eval, stock_codes, verbose=False)
+        agent = agent_factory(model, env_eval)
+        # agent.load('./models/EnvV2/PPO/0308_PPO_2M_10_Train/1.zip')
 
         ret = 0
         for i in range(episode):
@@ -160,7 +182,6 @@ def hold_agent_test(data: pd.DataFrame = None, model: str = 'Hold', episode: int
           'total {} training, average return {:.2f}, std {:.2f}, return rate {:.2f}%'.format(10, return_mean,
                                                                                              return_std,
                                                                                              100 * return_mean / global_var.INITIAL_BALANCE))
-    print('Agent:', 'average model training time: {:.2f} minutes'.format(np.mean(train_times)))
 
 
 def run_agent_keep_train(data: pd.DataFrame = None, model: str = 'Hold', episode: int = 20):
@@ -178,7 +199,7 @@ def run_agent_keep_train(data: pd.DataFrame = None, model: str = 'Hold', episode
     for e in range(10):
         for i in range(len(retrain_dates) - 1):
             data_train = to_daily_data(subdata_by_range(data, 20100101, retrain_dates[i]))
-            env_train = StockTrainEnv(data_train, stock_codes, verbose=False)
+            env_train = StockTrainEnvV2(data_train, stock_codes, verbose=False)
             # data_full = subdata_by_range(data, 20190101, 20211231)
             # data_full = to_daily_data(data_full)
             # env_full = StockTrainEnvV1(data_full, stock_codes, verbose=False)
@@ -187,7 +208,7 @@ def run_agent_keep_train(data: pd.DataFrame = None, model: str = 'Hold', episode
             agent.learn(timesteps=25000)
 
             data_eval = to_daily_data(subdata_by_range(data, retrain_dates[i], retrain_dates[i + 1]))
-            env_eval = StockTrainEnv(data_eval, stock_codes, verbose=False)
+            env_eval = StockTrainEnvV2(data_eval, stock_codes, verbose=False)
 
             ret = 0
             for i in range(episode):
@@ -204,8 +225,8 @@ def run_agent_keep_train(data: pd.DataFrame = None, model: str = 'Hold', episode
                         ret += total_rewards / global_var.REWARD_SCALING
                         break
             ret /= episode
-        print('Agent:', 'episode {:0>2d}/{}, avg return {:.2f}'.format(e + 1, 10, ret))
-        returns.append(ret)
+            print('Agent:', 'episode {:0>2d}/{}, avg return {:.2f}'.format(e + 1, 10, ret))
+            returns.append(ret)
     return_mean, return_std = np.mean(returns), np.std(returns)
     print('Agent:',
           'total {} training, average return {:.2f}, std {:.2f}, return rate {:.2f}%'.format(10, return_mean,
@@ -213,14 +234,17 @@ def run_agent_keep_train(data: pd.DataFrame = None, model: str = 'Hold', episode
                                                                                              100 * return_mean / global_var.INITIAL_BALANCE))
 
 
-def eval_agent(data: pd.DataFrame = None, episode: int = 1):
+def eval_agent(data: pd.DataFrame = None, model: str = 'TD3', episode: int = 1):
     stock_codes = get_stock_codes(data)
-    data_eval = subdata_by_range(data, 20180101, 20211231)
+    data_eval = subdata_by_range(data, 20100101, 20181231)
     data_eval = to_daily_data(data_eval)
-    env_eval = StockEvalEnv(data_eval, stock_codes, False)
-    path = './models/0223_PPO_2M_10_Train/best.zip'
-    agent = agent_factory('PPO', env_eval)
-    agent.load(path)
+    env_eval = StockEvalEnvV2(data_eval, stock_codes, False)
+
+    model_path = './models/TD3_10K.zip'
+    output_path = './figs/simulation/EnvV2_TD3_10K_Eval/'
+
+    agent = agent_factory(model, env_eval)
+    agent.load(model_path)
 
     returns_agent = []
     reward_memory_agent = []
@@ -230,6 +254,8 @@ def eval_agent(data: pd.DataFrame = None, episode: int = 1):
         total_rewards = 0
         # print(global_var.SEP_LINE1)
         # print('Agent:', f'episode {i+1}/{episode} begins.')
+        agent.initial = True
+
         state = env_eval.reset()
         while True:
             action = agent.act(state)
@@ -243,8 +269,9 @@ def eval_agent(data: pd.DataFrame = None, episode: int = 1):
                 reward_memory_agent = env_eval.reward_memory
                 return_memory_agent = np.cumsum(reward_memory_agent)
                 asset_memory_agent = [a[-1] for a in env_eval.asset_memory]
-                # env_eval.save_result('./figs/simulation/PPO_2M_Eval/total_assets1.png', './figs/simulation/PPO_2M_Eval/rewards1.png')
-                env_eval.dump_memory('./figs/simulation/PPO_2M_Eval/env_memory')
+                env_eval.save_result(output_path + 'total_assets.png', output_path + 'rewards.png')
+                os.makedirs(output_path + 'env_memory', exist_ok=True)
+                env_eval.dump_memory(output_path + 'env_memory/')
                 break
     print('Reward:', f'max:{max(reward_memory_agent)}', f'min:{min(reward_memory_agent)}')
     return_mean, return_std = np.mean(returns_agent), np.std(returns_agent)
@@ -253,7 +280,7 @@ def eval_agent(data: pd.DataFrame = None, episode: int = 1):
                                                                                              return_std,
                                                                                              100 * return_mean / global_var.INITIAL_BALANCE))
 
-    return
+    # return
 
     baseline_agent = agent_factory('Hold', env_eval)
     returns_baseline = []
@@ -287,14 +314,14 @@ def eval_agent(data: pd.DataFrame = None, episode: int = 1):
     from datetime import datetime
     x = [datetime.strptime(str(d), '%Y%m%d').date() for d in env_eval.dates][:-1]
 
-    # util.plot_daily_compare(x, return_memory_agent, return_memory_baseline, diff_y_scale=False, path='./figs/simulation/PPO_2M_Eval/total_assets3.png', label_y1='PPO')
-    # util.plot_daily_compare(x, asset_memory_agent, asset_memory_baseline, diff_y_scale=False, path='./figs/simulation/PPO_2M_Eval/total_assets_compare.png', label_y1='PPO')
-    # util.plot_daily_compare(x, reward_memory_agent, reward_memory_baseline, diff_y_scale=False, path='./figs/simulation/PPO_2M_Eval/daily_reward_compare.png', label_y1='PPO')
+    # util.plot_daily_compare(x, return_memory_agent, return_memory_baseline, diff_y_scale=False, path='./figs/simulation/DDPG_500K_Eval/total_assets3.png', label_y1='DDPG')
+    util.plot_daily_compare(x, asset_memory_agent, asset_memory_baseline, diff_y_scale=False, path=output_path + 'total_assets_compare.png', label_y1=model)
+    util.plot_daily_compare(x, reward_memory_agent, reward_memory_baseline, diff_y_scale=False, path=output_path + 'daily_reward_compare.png', label_y1=model)
 
-    # 绘制波动期（2020.05-2021.12）每日回报
-    util.plot_daily_compare(x[540:900], reward_memory_agent[540:900], reward_memory_baseline[540:900],
-                            diff_y_scale=False,
-                            path='./figs/simulation/PPO_2M_Eval/daily_reward_compare_2020.png', label_y1='PPO')
+    # # 绘制波动期（2020.05-2021.12）每日回报
+    # util.plot_daily_compare(x[540:900], reward_memory_agent[540:900], reward_memory_baseline[540:900],
+    #                         diff_y_scale=False,
+    #                         path='./figs/simulation/PPO_2M_Eval/daily_reward_compare_2020.png', label_y1='PPO')
 
 
 class Agent():
@@ -344,12 +371,15 @@ class HoldAgent(Agent):
             balance = state[0]
             stock_dim = self.env.stock_dim
             single_stock_budget = balance / stock_dim
-            stock_prices = state[1 + stock_dim: 1 + 2 * stock_dim]
-            buy_vol = [single_stock_budget / x / global_var.SHARES_PER_TRADE for x in stock_prices]
-            action = np.array(buy_vol)
+
+            action = np.array([1 for _ in range(stock_dim)])
+            # stock_prices = state[1 + stock_dim: 1 + 2 * stock_dim]
+            # buy_vol = [single_stock_budget / x / global_var.SHARES_PER_TRADE for x in stock_prices]
+            # action = np.array(buy_vol)
+
             # print('HoldAgent:', f'day 0, initial balance {balance}, {stock_dim} stocks, single stock budget {single_stock_budget}')
             # print('HoldAgent:', 'stock prices', stock_prices)
-            # print('HoldAgent:', 'buy volume', action)
+            # print('HoldAgent:', 'buy amount', action)
             self.initial = False
         return action
 
@@ -379,7 +409,7 @@ class DDPGAgent(Agent):
     """采用DDPG算法的Agent。"""
 
     def __init__(self, env: gym.Env):
-        self.model = DDPG('MlpPolicy', env, verbose=0)
+        self.model = A2C('MlpPolicy', env, verbose=2)
 
     def learn(self, timesteps: int):
         self.model.learn(total_timesteps=timesteps)
@@ -393,8 +423,51 @@ class DDPGAgent(Agent):
         self.model.save(path)
 
     def load(self, path: str):
-        self.model = DDPG.load(path)
+        self.model = A2C.load(path)
 
+
+class A2CAgent(Agent):
+    """采用A2C算法的Agent。"""
+
+    def __init__(self, env: gym.Env):
+        self.model = A2C('MlpPolicy', env, verbose=0)
+
+    def learn(self, timesteps: int):
+        self.model.learn(total_timesteps=timesteps)
+
+    def act(self, state: np.ndarray) -> np.ndarray:
+        action, _ = self.model.predict(state)
+        # print('A2CAgent:', action)
+        return action
+
+    def save(self, path: str):
+        self.model.save(path)
+
+    def load(self, path: str):
+        self.model = A2C.load(path)
+
+
+class TD3Agent(Agent):
+    """采用TD3算法的Agent。"""
+
+    def __init__(self, env: gym.Env):
+        n_actions = env.action_space.shape[-1]
+        action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions))
+        self.model = TD3('MlpPolicy', env, verbose=1, action_noise=action_noise)
+
+    def learn(self, timesteps: int):
+        self.model.learn(total_timesteps=timesteps)
+
+    def act(self, state: np.ndarray) -> np.ndarray:
+        action, _ = self.model.predict(state, deterministic=True)
+        # print('TD3Agent:', action)
+        return action
+
+    def save(self, path: str):
+        self.model.save(path)
+
+    def load(self, path: str):
+        self.model = TD3.load(path)
 
 # class NNAgent(Agent):
 #     """DL的神经网络Agent，作为RL算法的对比。"""
@@ -443,6 +516,10 @@ def agent_factory(agent_name: str, env) -> Agent:
         return HoldAgent(env)
     elif agent_name == 'PPO':
         return PPOAgent(env)
+    elif agent_name == 'A2C':
+        return A2CAgent(env)
+    elif agent_name == 'TD3':
+        return TD3Agent(env)
     elif agent_name == 'DDPG':
         return DDPGAgent(env)
     raise ValueError('所需Agent未定义')

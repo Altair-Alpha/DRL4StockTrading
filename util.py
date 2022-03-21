@@ -2,6 +2,8 @@ from datetime import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from stable_baselines3.common.monitor import load_results
+from stable_baselines3.common.results_plotter import ts2xy
 
 from preprocessor import *
 
@@ -25,7 +27,7 @@ def plot_daily(x: list, y: list, path: str):
     plt.savefig(path)
     plt.close()
 
-def plot_daily_compare(x: list, y1: list, y2: list, diff_y_scale: bool, path:str, label_y1: str, label_y2: str = 'baseline'):
+def plot_daily_compare(x: list, y1: list, y2: list, diff_y_scale: bool, path:str, label_y1: str, label_y2: str = 'Hold(baseline)'):
     if len(y2) == 0:
         data = subdata_by_range(read_data(), 20180101, 20211231)
         y2 = calc_daily_mean(data)[:-1]
@@ -115,7 +117,80 @@ def calc_daily_mean(data: pd.DataFrame) -> list:
     return mean_data
 
 
+def draw_mean_std(x: list, mean: list, std: list, log_scale: bool, path: str):
+    plt.figure(figsize=(30, 10))
+    plt.rc('font', size=24)
+    eb = plt.errorbar(x, mean, std, color='blue', linewidth=3, capsize=5)
+    eb[-1][0].set_linestyle('--')
+    plt.title('PPO')
+    plt.xlabel('Timesteps')
+    plt.ylabel('Average Return')
+    # plt.xlim(xmin=0)
+    plt.ylim(ymin=0)
+    if log_scale:
+        plt.xscale('log')
+    else:
+        plt.ticklabel_format(style='sci', useMathText=True)
+
+    plt.savefig(path)
+    plt.close()
+
+
+# Agent学习曲线
+def moving_average(values, window):
+    """
+    Smooth values by doing a moving average
+    :param values: (numpy array)
+    :param window: (int)
+    :return: (numpy array)
+    """
+    weights = np.repeat(1.0, window) / window
+    return np.convolve(values, weights, 'valid')
+
+
+def plot_results(log_folder, save_path: str, title='Learning Curve'):
+    """
+    plot the results
+
+    :param log_folder: (str) the save location of the results to plot
+    :param title: (str) the title of the task to plot
+    """
+    x, y = ts2xy(load_results(log_folder), 'timesteps')
+    # y = moving_average(y, window=5)
+    # Truncate x
+    x = x[len(x) - len(y):]
+
+    plt.figure(title)
+    plt.plot(x, y)
+    plt.xlabel('Timesteps')
+    plt.ylabel('Rewards')
+    plt.title(title + " Smoothed")
+    plt.savefig(save_path)
+    plt.close()
+
+
+def test_sb():
+    import gym
+    from stable_baselines3 import TD3
+    from stable_baselines3.common.env_util import make_vec_env
+    env = gym.make("Pendulum-v0")
+    model = TD3("MlpPolicy", env, verbose=1)
+    model.learn(total_timesteps=10000)
+    plot_results('./models/A2C_test/tuned', './models/A2C_test/tuned/learning_curve.png')
+
+    obs = env.reset()
+    while True:
+        action, _states = model.predict(obs)
+        print('A:', action)
+        obs, rewards, dones, info = env.step(action)
+
+        # env.render()
+
 if __name__ == '__main__':
-    l = [346939.79, 364304.25, 224077.53, 553994.91, 385011.51, 672975.81, 383956.12, 374734.04, 547615.06, 721823.17]\
-        + [661139.10, 389922.04, 415811.65, 191674.56, 153699.03, 155645.90, 372851.19, 220504.27, 304572.08, 229018.38]
-    print('mean', np.mean(l), 'std', np.std(l))
+    # ppo_perf = {'timesteps':    [0,         10e3,       25e3,       50e3,       10e4,       25e4,       50e4,       1e6,        2e6],
+    #             'mean':         [126418.34, 217380.32,  298220.62,  313085.22,  360852.02,  409095.19,  429844.81,  497041.50,  530048.06],
+    #             'std':          [16782.47,  52277.96,   151125.63,  155977.04,  157869.34,  69408.79,   138805.86,  143035.92,  124618.02]}
+    # draw_mean_std(ppo_perf['timesteps'], ppo_perf['mean'], ppo_perf['std'], True, './figs/simulation/PPO_2M_Eval/timesteps_log.png')
+
+    # plot_results('./models/A2C_test', './models/A2C_test/lerning_curve_smoothed.png')
+    test_sb()

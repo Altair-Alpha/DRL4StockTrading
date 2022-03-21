@@ -188,7 +188,7 @@ class StockEvalEnv(gym.Env):
 
     def dump_memory(self, path: str):
         stock_hold_df = pd.DataFrame([x[1:self.stock_dim+1] for x in self.asset_memory], columns=self.stock_codes, index=self.dates[:-1])
-        stock_hold_df.T.to_csv(path + '/stock_hold_memory.csv') # 为适配图表制作，进行转置
+        stock_hold_df.T.to_csv(path + 'stock_hold_memory.csv') # 为适配图表制作，进行转置
 
         asset_dist = []
         for i, d in enumerate(self.dates[:-1]):
@@ -200,12 +200,12 @@ class StockEvalEnv(gym.Env):
                 print('NOT EQUAL!!', sum(asset_dist[i]), self.asset_memory[i][-1])
                 return
         asset_dist_df = pd.DataFrame(asset_dist, columns=['balance'] + self.stock_codes, index=self.dates[:-1])
-        asset_dist_df.T.to_csv(path + '/asset_distribution_memory.csv')
+        asset_dist_df.T.to_csv(path + 'asset_distribution_memory.csv')
 
         reward_memory_df = pd.DataFrame(self.reward_memory, columns=['reward'], index=self.dates[:-1])
-        reward_memory_df.to_csv(path + '/reward_memory.csv')
+        reward_memory_df.to_csv(path + 'reward_memory.csv')
         action_meomory_df = pd.DataFrame(self.action_memory, columns=self.stock_codes, index=self.dates[:-1])
-        action_meomory_df.to_csv(path + '/action_memory.csv')
+        action_meomory_df.to_csv(path + 'action_memory.csv')
 
 if __name__ == '__main__':
     pass
