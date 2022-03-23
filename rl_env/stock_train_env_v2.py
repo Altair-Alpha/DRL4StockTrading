@@ -12,7 +12,6 @@ import global_var
 # V2将aciton视为对每只股票资金量的操作而非持股数的操作
 class StockTrainEnvV2(gym.Env):
     """符合OpenAI Gym接口的模拟股市环境"""
-    metadata = {'render.modes': ['human']}
 
     def __init__(self, daily_data: Dict[int, pd.DataFrame], stock_codes: List[str], verbose: bool = True):
         super(StockTrainEnvV2, self).__init__()
@@ -42,19 +41,24 @@ class StockTrainEnvV2(gym.Env):
     def step(self, action: np.ndarray):
         self.done = (self.cur_date == self.last_date)
         self.reward = 0  # 清零，否则最后一个step会重复返回上一个step的reward
+        if self.done:
+            # print('StockTrainEnvV2:', 'episode ended, asset:', self.state[0] + sum(
+            #     [shares*price for shares, price in zip(self.state[1 : self.stock_dim+1],
+            #                                            self.state[self.stock_dim+1 : 2*self.stock_dim+1])]))
+            #save_result(self.dates, self.asset_memory, self.reward_memory, self.verbose)
+            pass
 
-        if not self.done:
+        else:
             # 总资产为：余额 + 每只股票持股 * 当前日期股价
             begin_total_asset = self.state[0] + sum(
                 [shares * price for shares, price in zip(self.state[1: self.stock_dim + 1],
                                                          self.state[self.stock_dim + 1: 2 * self.stock_dim + 1])])
 
-            # 设当前总资金量 * global_var.MAX_PERCENTAGE_PER_TRADE = m
-            # 对每只股票的单日交易资金量由输入动作[-1,1]放大至[-m,m]区间
+            # 对每只股票的单日交易资金量不能超过当前总资金量 * global_var.MAX_PERCENTAGE_PER_TRADE
             action = action * (begin_total_asset * global_var.MAX_PERCENTAGE_PER_TRADE)
 
-            # self.asset_memory.append(
-            #     self.state[0: self.stock_dim + 1] + [begin_total_asset])  # state中 0至STOCK_DIM 项为（余额，持股）
+            self.asset_memory.append(
+                self.state[0: self.stock_dim + 1] + [begin_total_asset])  # state中 0至STOCK_DIM 项为（余额，持股）
 
             if self.verbose:
                 print(global_var.SEP_LINE1)
@@ -84,7 +88,7 @@ class StockTrainEnvV2(gym.Env):
                 [shares * price for shares, price in zip(self.state[1: self.stock_dim + 1],
                                                          self.state[self.stock_dim + 1: 2 * self.stock_dim + 1])])
             self.reward = end_total_asset - begin_total_asset
-            # self.reward_memory.append(self.reward)
+            self.reward_memory.append(self.reward)
 
             if self.verbose:
                 print(global_var.SEP_LINE1)
@@ -111,8 +115,8 @@ class StockTrainEnvV2(gym.Env):
                      + self.data[self.cur_date]['rsi'].tolist()
         if self.verbose:
             print('StockTrainEnvV2:', 'reset:', 'init state', self.state)
-        # self.asset_memory = []  # 记录历史每步资产状态：资金+持股+总资产（前两项合起来）
-        # self.reward_memory = []  # 记录历史每步收益
+        self.asset_memory = []  # 记录历史每步资产状态：资金+持股+总资产（前两项合起来）
+        self.reward_memory = []  # 记录历史每步收益
 
         self.trade_count = 0
         return np.array(self.state)
@@ -121,7 +125,7 @@ class StockTrainEnvV2(gym.Env):
         # 确保入参amount不超过余额，避免交易后账户余额为负，计算对应股数（向下取整）
         vol = min(amount, self.state[0]) // self.state[1 + self.stock_dim + index]
         # 真正买入资金量
-        # A股印花税为卖方单向收费，此处买入不扣交易费
+        # A股印花税为卖方单向收费，其余小额双向收费项暂且不计
         real_amount = vol * self.state[1 + self.stock_dim + index]
 
         # 更新持股
@@ -146,7 +150,7 @@ class StockTrainEnvV2(gym.Env):
             # 更新持股
             self.state[1 + index] -= real_volume
             # 更新资金，增加：股价*购买股数*(1-交易费率)
-            # A股印花税为卖方单向收费
+            # A股印花税为卖方单向收费，其余小额双向收费项暂且不计
             real_amount = self.state[1 + self.stock_dim + index] * real_volume \
                      * (1 - global_var.TRANSACTION_FEE_PERCENTAGE)
             prev_balance = self.state[0]

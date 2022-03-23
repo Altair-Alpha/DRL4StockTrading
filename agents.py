@@ -20,9 +20,13 @@ from stock_train_env_v2 import StockTrainEnvV2
 from stock_eval_env_v2 import StockEvalEnvV2
 
 
-def run_agent(data: pd.DataFrame = None, model: str = 'TD3', episode: int = 2):
+def run_agent(data: pd.DataFrame = None, model: str = 'A2C', episode: int = 1):
     stock_codes = get_stock_codes(data)
     data_train = subdata_by_range(data, 20100101, 20171231)
+    # print(data_train['close'].head())
+
+    # print(data_train['close'].head())
+    # return
     data_train = to_daily_data(data_train)
 
     # env_train = make_vec_env(StockTrainEnv, n_envs=4,
@@ -31,9 +35,11 @@ def run_agent(data: pd.DataFrame = None, model: str = 'TD3', episode: int = 2):
     # os.makedirs(model_path, exist_ok=True)
 
     # env_train = VecMonitor(VecNormalize(DummyVecEnv([lambda: StockTrainEnvV2(data_train, stock_codes, False)])), './models/TD3_log')
-    env_train = Monitor(StockTrainEnvV2(data_train, stock_codes, False), './models/TD3_log')
+    # env_train = VecNormalize(DummyVecEnv([lambda: StockTrainEnvV2(data_train, stock_codes, False)]))
+    # env_train = Monitor(StockTrainEnvV2(data_train, stock_codes, False), './models/TD3_log')
+    # env_train = StockTrainEnvV2(data_train, stock_codes, False)
 
-    # env_train = make_vec_env(StockTrainEnvV2, n_envs=4, env_kwargs={'daily_data': data_train, 'stock_codes': stock_codes, 'verbose': False},
+    env_train = make_vec_env(StockTrainEnvV2, n_envs=4, env_kwargs={'daily_data': data_train, 'stock_codes': stock_codes, 'verbose': False})#,
     #                          monitor_dir='./models/TD3_log')
     # DDPG不支持多环境
     #
@@ -43,11 +49,11 @@ def run_agent(data: pd.DataFrame = None, model: str = 'TD3', episode: int = 2):
         print('Agent:', f'using {model} agent')
 
     train_start_time = time.time()
-    agent.learn(timesteps=25000)
-    agent.save('./models/TD3_10K')
-    # agent.load('./models/PPO_1M')
+    agent.learn(timesteps=10000)
+    # agent.save('./models/TD3_10K')
+    # # agent.load('./models/PPO_1M')
     train_end_time = time.time()
-    util.plot_results('./models/TD3_log', './models/TD3_log/lerning_curve.png')
+    # util.plot_results('./models/TD3_log', './models/TD3_log/lerning_curve.png')
 
     data_eval = subdata_by_range(data, 20180101, 20211231)
     data_eval = to_daily_data(data_eval)
@@ -55,6 +61,7 @@ def run_agent(data: pd.DataFrame = None, model: str = 'TD3', episode: int = 2):
 
     returns = []
     for i in range(episode):
+        # agent.initial = True
         total_rewards = 0
         # print(global_var.SEP_LINE1)
         # print('Agent:', f'episode {i+1}/{episode} begins.')
@@ -66,7 +73,7 @@ def run_agent(data: pd.DataFrame = None, model: str = 'TD3', episode: int = 2):
             total_rewards += reward
             if done:
                 ret = total_rewards / global_var.REWARD_SCALING
-                print('Agent:', 'episode {:0>2d}/{}, return(total reward) {:.2f}'.format(i + 1, episode, ret))
+                print('Agent:', 'episode {:0>2d}/{:0>2d}, return(total reward) {:.2f}'.format(i + 1, episode, ret))
                 returns.append(ret)
                 break
     return_mean, return_std = np.mean(returns), np.std(returns)
@@ -89,17 +96,17 @@ def run_agent_test(data: pd.DataFrame = None, model: str = 'A2C', n_train: int =
     returns = []
     train_times = []
 
-    model_path = f'./models/EnvV2/A2C/0308_A2C_1M_10_Train/'
+    model_path = f'./models/EnvV2/A2C/0323_A2C_250K_10_Train/'
     os.makedirs(model_path, exist_ok=True)
     for e in range(n_train):
-        # env_train = StockTrainEnv(data_train, stock_codes, verbose=False)
+        # env_train = StockTrainEnvV2(data_train, stock_codes, verbose=False)
 
         log_path = model_path + f'logs/{e+1}/'
         os.makedirs(log_path, exist_ok=True)
         # env_train = Monitor(env_train, log_path)
 
         env_train = make_vec_env(StockTrainEnvV2, n_envs=4,
-                                 env_kwargs={'daily_data': data_train, 'stock_codes': stock_codes, 'verbose': False}#)
+                                 env_kwargs={'daily_data': data_train, 'stock_codes': stock_codes, 'verbose': False}#
                                  ,monitor_dir=log_path)
         # data_full = subdata_by_range(data, 20190101, 20211231)
         # data_full = to_daily_data(data_full)
@@ -107,7 +114,7 @@ def run_agent_test(data: pd.DataFrame = None, model: str = 'A2C', n_train: int =
 
         agent = agent_factory(model, env_train)
         train_start_time = time.time()
-        agent.learn(timesteps=1000000)
+        agent.learn(timesteps=250000)
         train_end_time = time.time()
         agent.save(model_path + f'{e+1}')
         util.plot_results(log_path, log_path + 'learning_curve.png')
@@ -118,6 +125,7 @@ def run_agent_test(data: pd.DataFrame = None, model: str = 'A2C', n_train: int =
         ret = 0
         for i in range(episode):
             total_rewards = 0
+            agent.initial = True
             # print(global_var.SEP_LINE1)
             # print('Agent:', f'episode {i+1}/{episode} begins.')
             state = env_eval.reset()
@@ -131,6 +139,10 @@ def run_agent_test(data: pd.DataFrame = None, model: str = 'A2C', n_train: int =
                     break
         ret /= episode
         print('Agent:', 'episode {:0>2d}/{}, avg return {:.2f}'.format(e + 1, 10, ret))
+        # if 100 * ret / global_var.INITIAL_BALANCE < 5:
+        #     print('Agent', 'episode {:0>2d}/{} train failed.'.format(e + 1, 10))
+        #     e -= 1
+        # else:
         returns.append(ret)
     return_mean, return_std = np.mean(returns), np.std(returns)
     print('Agent:',
@@ -234,14 +246,15 @@ def run_agent_keep_train(data: pd.DataFrame = None, model: str = 'Hold', episode
                                                                                              100 * return_mean / global_var.INITIAL_BALANCE))
 
 
-def eval_agent(data: pd.DataFrame = None, model: str = 'TD3', episode: int = 1):
+def eval_agent(data: pd.DataFrame = None, model: str = 'Hold', episode: int = 1):
     stock_codes = get_stock_codes(data)
-    data_eval = subdata_by_range(data, 20100101, 20181231)
+    data_eval = subdata_by_range(data, 20180101, 20211231)
     data_eval = to_daily_data(data_eval)
     env_eval = StockEvalEnvV2(data_eval, stock_codes, False)
 
     model_path = './models/TD3_10K.zip'
-    output_path = './figs/simulation/EnvV2_TD3_10K_Eval/'
+    output_path = './figs/simulation/Multi_Stock/EnvV2_Hold_Eval/'
+    os.makedirs(output_path, exist_ok=True)
 
     agent = agent_factory(model, env_eval)
     agent.load(model_path)
@@ -394,7 +407,7 @@ class PPOAgent(Agent):
         self.model.learn(total_timesteps=timesteps)
 
     def act(self, state: np.ndarray) -> np.ndarray:
-        action, _ = self.model.predict(state)
+        action, _ = self.model.predict(state) # eval时使用确定策略
         # print('PPOAgent:', action)
         return action
 
@@ -409,7 +422,7 @@ class DDPGAgent(Agent):
     """采用DDPG算法的Agent。"""
 
     def __init__(self, env: gym.Env):
-        self.model = A2C('MlpPolicy', env, verbose=2)
+        self.model = A2C('MlpPolicy', env, verbose=1)
 
     def learn(self, timesteps: int):
         self.model.learn(total_timesteps=timesteps)
@@ -459,7 +472,7 @@ class TD3Agent(Agent):
         self.model.learn(total_timesteps=timesteps)
 
     def act(self, state: np.ndarray) -> np.ndarray:
-        action, _ = self.model.predict(state, deterministic=True)
+        action, _ = self.model.predict(state)
         # print('TD3Agent:', action)
         return action
 

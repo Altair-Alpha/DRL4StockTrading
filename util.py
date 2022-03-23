@@ -8,38 +8,47 @@ from stable_baselines3.common.results_plotter import ts2xy
 from preprocessor import *
 
 
-def plot_daily(x: list, y: list, path: str):
+def plot_daily(x: list, y: list, path: str=None):
     """绘制每日数据的辅助函数。
 
-    :param x: 横轴数据，应为日期的列表
+    :param x: 横轴数据，应为日期的列表（注意数据类型为date而非int）
     :param y: 纵轴数据，任意绘制数据的列表
     :param path: 图像保存路径
     """
     # plt.style.use('seaborn')
     plt.figure(figsize=(30, 10))
-    plt.rc('font', size=18)
+    plt.rc('font', size=20)
     plt.margins(x=0.02)
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
-    interval = np.clip(len(x) // 10, 1, 120) # 调整横轴日期间距，避免过挤
+    interval = np.clip(len(x) // 10, 1, 200) # 调整横轴日期间距，避免过挤
     plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=interval))
+    plt.xlabel('Date')
+    plt.ylabel('TotalAsset')
     plt.plot(x, y, linewidth=3, color='blue')
     plt.gcf().autofmt_xdate()
-    plt.savefig(path)
+    plt.ticklabel_format(style='sci', axis='y', useMathText=True)
+    if path is None:
+        print(y)
+        plt.show()
+    else:
+        plt.savefig(path)
     plt.close()
 
 def plot_daily_compare(x: list, y1: list, y2: list, diff_y_scale: bool, path:str, label_y1: str, label_y2: str = 'Hold(baseline)'):
+
     if len(y2) == 0:
         data = subdata_by_range(read_data(), 20180101, 20211231)
         y2 = calc_daily_mean(data)[:-1]
 
-    # plt.style.use('seaborn')
+    plt.rc('font', size=20)
     plt.figure(figsize=(30, 10))
-    plt.rc('font', size=18)
     plt.rc('legend', fontsize=20, handlelength=3, edgecolor='black')
     plt.margins(x=0.02)
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
-    interval = np.clip(len(x) // 10, 1, 120)  # 调整横轴日期间距，避免过挤
+    interval = np.clip(len(x) // 10, 1, 200)  # 调整横轴日期间距，避免过挤
     plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=interval))
+    plt.xlabel('Date')
+    plt.ylabel('TotalAsset')
 
     if diff_y_scale:
         ax1 = plt.gca()
@@ -55,6 +64,7 @@ def plot_daily_compare(x: list, y1: list, y2: list, diff_y_scale: bool, path:str
         plt.legend(loc='upper left')
 
     plt.gcf().autofmt_xdate()
+    plt.ticklabel_format(style='sci', axis='y', useMathText=True)
     plt.savefig(path)
     plt.close()
 
@@ -70,7 +80,8 @@ def read_data():
     return stock_data
 
 
-def draw_avg_stock_price(stock_data: pd.DataFrame, eval_period_only: bool = True):
+def draw_avg_stock_price(stock_data: pd.DataFrame, eval_period_only: bool = False):
+    plt.style.use('seaborn')
     if eval_period_only:
         stock_data = subdata_by_range(stock_data, 20180101, 20211231)
     # 横轴为交易日期（所有股票统一）
@@ -100,7 +111,7 @@ def draw_avg_stock_price(stock_data: pd.DataFrame, eval_period_only: bool = True
     plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=120))
     plt.plot(x, y, linewidth=3, color='blue')
     plt.gcf().autofmt_xdate()
-    plt.savefig('./figs/stock_price/avg20_2018-2021_noanomaly.png')
+    plt.savefig('./figs/stock_price/avg17_2010-2021.png')
     plt.close()
 
 
@@ -118,6 +129,7 @@ def calc_daily_mean(data: pd.DataFrame) -> list:
 
 
 def draw_mean_std(x: list, mean: list, std: list, log_scale: bool, path: str):
+    plt.style.use('seaborn')
     plt.figure(figsize=(30, 10))
     plt.rc('font', size=24)
     eb = plt.errorbar(x, mean, std, color='blue', linewidth=3, capsize=5)
@@ -193,4 +205,12 @@ if __name__ == '__main__':
     # draw_mean_std(ppo_perf['timesteps'], ppo_perf['mean'], ppo_perf['std'], True, './figs/simulation/PPO_2M_Eval/timesteps_log.png')
 
     # plot_results('./models/A2C_test', './models/A2C_test/lerning_curve_smoothed.png')
-    test_sb()
+    # test_sb()
+    data = read_data()
+    data = calc_daily_mean(data)
+    print('start:',data[0], 'end', data[-1])
+    print('up:', (data[-1]-data[0])/data[0])
+    # draw_avg_stock_price(data)
+    # print(get_trade_dates(data))
+    # # plot_daily(get_trade_dates(data), data['close'].tolist())
+    # plot_daily(get_trade_dates(data), calc_daily_mean(data))

@@ -21,14 +21,14 @@ if __name__ == '__main__':
         preprocessed_stock_data = load_and_preprocess(global_var.STOCK_DATA_PATH)
         preprocessed_stock_data.to_csv(global_var.PREPROCESSED_DATA_PATH)
         if global_var.VERBOSE:
-            print('Main:', 'stock data preprocessing complete and saved.')
+            print('Main:', 'stock data preprocessing complete and saved to:', global_var.PREPROCESSED_DATA_PATH)
 
     # run_agent(remove_anomaly(preprocessed_stock_data))
+    run_agent_test(remove_anomaly(preprocessed_stock_data))
     # eval_agent_train(remove_anomaly(preprocessed_stock_data))
     # run_agent_keep_train(remove_anomaly(preprocessed_stock_data))
 
-    eval_agent(remove_anomaly(preprocessed_stock_data))
-    # run_agent_test(remove_anomaly(preprocessed_stock_data))
+    # eval_agent(remove_anomaly(preprocessed_stock_data))
     # util.draw_avg_stock_price(remove_anomaly(preprocessed_stock_data))
 
     end_time = time.time()

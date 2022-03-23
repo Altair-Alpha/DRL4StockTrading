@@ -1,4 +1,5 @@
 from typing import Dict, List
+from datetime import datetime, date
 import numpy
 import numpy as np
 import pandas as pd
@@ -99,6 +100,13 @@ def get_stock_codes(data: pd.DataFrame) -> List[str]:
     """
     return list(data['ts_code'].unique())
 
+def get_trade_dates(data: pd.DataFrame) -> List[date]:
+    """获取原始数据中所有交易日期的list
+
+    :param data: 原始数据
+    """
+    dates = list(data['trade_date'].unique())
+    return [datetime.strptime(str(d), '%Y%m%d').date() for d in dates]
 
 def remove_anomaly(data: pd.DataFrame) -> pd.DataFrame:
     """茅台600519.SH，片仔癀600436.SH和山西汾酒600809.SH三只股票近10年涨幅过高，此函数从原数据中去除这三只股票的数据。

@@ -57,8 +57,7 @@ class StockEvalEnvV2(gym.Env):
                                                          self.state[self.stock_dim + 1: 2 * self.stock_dim + 1])])
 
             # 对每只股票的单日交易资金量不能超过当前总资金量 * global_var.MAX_PERCENTAGE_PER_TRADE
-            self.action_memory.append(action)
-            action = action * (begin_total_asset * global_var.MAX_PERCENTAGE_PER_TRADE * 1)
+            action = action * (begin_total_asset * global_var.MAX_PERCENTAGE_PER_TRADE)
 
             self.asset_memory.append(
                 self.state[0: self.stock_dim + 1] + [begin_total_asset])  # state中 0至STOCK_DIM 项为（余额，持股）
