@@ -56,8 +56,10 @@ class StockEvalEnvV2(gym.Env):
                 [shares * price for shares, price in zip(self.state[1: self.stock_dim + 1],
                                                          self.state[self.stock_dim + 1: 2 * self.stock_dim + 1])])
 
+            self.action_memory.append(action)
             # 对每只股票的单日交易资金量不能超过当前总资金量 * global_var.MAX_PERCENTAGE_PER_TRADE
             action = action * (begin_total_asset * global_var.MAX_PERCENTAGE_PER_TRADE)
+
 
             self.asset_memory.append(
                 self.state[0: self.stock_dim + 1] + [begin_total_asset])  # state中 0至STOCK_DIM 项为（余额，持股）
@@ -167,6 +169,12 @@ class StockEvalEnvV2(gym.Env):
                       'type: sell', f'vol: {real_volume}', f'amount: {amount}')
                 print('StockTrainEnvV2:', f'balance increase from {prev_balance} to {self.state[0]}')
 
+    def reset_date(self, new_start, new_end):
+        self.dates = [x for x in self.dates if (x>=new_start and x<=new_end)]
+        self.cur_date = self.dates[0]
+        self.last_date = self.dates[-1]
+        self.day_count = 0
+
     def save_result(self, asset_graph_path: str, reward_graph_path: str):
         if self.verbose:
             print('StockEvalEnvV2:', 'saving results.')
@@ -198,7 +206,7 @@ class StockEvalEnvV2(gym.Env):
         reward_memory_df = pd.DataFrame(self.reward_memory, columns=['reward'], index=self.dates[:-1])
         reward_memory_df.to_csv(path + 'reward_memory.csv')
         action_meomory_df = pd.DataFrame(self.action_memory, columns=self.stock_codes, index=self.dates[:-1])
-        action_meomory_df.to_csv(path + 'action_memory.csv')
+        action_meomory_df.T.to_csv(path + 'action_memory.csv')
 
 if __name__ == '__main__':
     pass
