@@ -1,5 +1,4 @@
-from datetime import datetime
-import pandas as pd
+from datetime import timedelta
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from stable_baselines3.common.monitor import load_results
@@ -8,8 +7,23 @@ from stable_baselines3.common.results_plotter import ts2xy
 from preprocessor import *
 
 
-def plot_daily(x: list, y: list, path: str=None):
-    """绘制每日数据的辅助函数。
+def get_quarter_dates(start_date: int, end_date: int) -> list:
+    start_date = datetime.strptime(str(start_date), '%Y%m%d')
+    end_date = datetime.strptime(str(end_date), '%Y%m%d')
+    cur_date = start_date
+    date_lst = []
+    while True:
+        date_lst.append(int(datetime.strftime(cur_date, '%Y%m%d')))
+        cur_date = cur_date + timedelta(days=92)
+        if cur_date > end_date:
+            break
+    date_lst.append(int(datetime.strftime(end_date, '%Y%m%d')))
+    return date_lst
+
+
+def plot_daily(x: list, y: list, path: str = None):
+    """
+    绘制每日数据的辅助函数。
 
     :param x: 横轴数据，应为日期的列表（注意数据类型为date而非int）
     :param y: 纵轴数据，任意绘制数据的列表
@@ -20,7 +34,7 @@ def plot_daily(x: list, y: list, path: str=None):
     plt.rc('font', size=20)
     plt.margins(x=0.02)
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
-    interval = np.clip(len(x) // 10, 1, 200) # 调整横轴日期间距，避免过挤
+    interval = np.clip(len(x) // 10, 1, 200)  # 调整横轴日期间距，避免过挤
     plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=interval))
     plt.xlabel('Date')
     plt.ylabel('TotalAsset')
@@ -34,11 +48,26 @@ def plot_daily(x: list, y: list, path: str=None):
         plt.savefig(path)
     plt.close()
 
-def plot_daily_compare(x: list, y1: list, y2: list, diff_y_scale: bool, path:str, label_y1: str, label_y2: str = 'Hold(baseline)'):
 
+def plot_daily_compare(x: list, y1: list, y2: list, y1_label: str = 'y1',
+                       y2_label: str = 'y2', diff_y_scale: bool = False, save_path: str = None):
+    """
+    绘制两组每日数据比较的辅助函数。第一组为蓝线，第二组为红线。
+
+    :param x: 横轴数据，应为日期的列表（注意数据类型为date而非int）
+    :param y1: 第一组数据y值列表
+    :param y2: 第二组数据y值列表
+    :param diff_y_scale: 两组数据是否采取不同的纵轴数据范围
+    :param save_path: 图像保存路径
+    :param y1_label: 第一组数据标签
+    :param y2_label: 第二组数据标签
+    """
+
+    ####### 临时 #######
     if len(y2) == 0:
         data = subdata_by_range(read_data(), 20180101, 20211231)
         y2 = calc_daily_mean(data)[:-1]
+    ###################
 
     plt.rc('font', size=20)
     plt.figure(figsize=(30, 10))
@@ -52,20 +81,54 @@ def plot_daily_compare(x: list, y1: list, y2: list, diff_y_scale: bool, path:str
 
     if diff_y_scale:
         ax1 = plt.gca()
-        ax1.set_ylabel(label_y1, color='red', fontsize=16)
-        ax1.plot(x, y1, linewidth=3, color='red')
+        ax1.plot(x, y1, linewidth=3, color='blue', label=y1_label)
 
         ax2 = ax1.twinx()
-        ax2.set_ylabel(label_y2, color='blue', fontsize=16)
-        ax2.plot(x, y2, linewidth=3, color='blue')
+        ax2.plot(x, y2, linewidth=3, color='red', label=y2_label)
     else:
-        plt.plot(x, y1, linewidth=3, color='red', label=label_y1)
-        plt.plot(x, y2, linewidth=3, color='blue', label=label_y2)
+        plt.plot(x, y1, linewidth=3, color='blue', label=y1_label)
+        plt.plot(x, y2, linewidth=3, color='red', label=y2_label)
         plt.legend(loc='upper left')
 
     plt.gcf().autofmt_xdate()
     plt.ticklabel_format(style='sci', axis='y', useMathText=True)
-    plt.savefig(path)
+    if save_path is not None:
+        plt.savefig(save_path)
+    plt.close()
+
+
+def plot_daily_multi_y(x: list, ys: list, ys_label: List[str], save_path: str = None):
+    """
+    绘制多组每日数据比较的辅助函数。线条颜色为蓝、红、绿、青、紫、黑循环
+
+    :param x: 横轴数据，应为日期的列表（注意数据类型为date而非int）
+    :param ys: n组y值列表的列表
+    :param ys_label: n组y值的标签
+    :param save_path: 图像保存路径
+    """
+
+    plt.rc('font', size=20)
+    plt.figure(figsize=(30, 10))
+    plt.rc('legend', fontsize=20, handlelength=3, edgecolor='black')
+    plt.margins(x=0.02)
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
+    interval = np.clip(len(x) // 10, 1, 200)  # 调整横轴日期间距，避免过挤
+    plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=interval))
+    plt.xlabel('Date')
+    plt.ylabel('TotalAsset')
+
+    from itertools import cycle
+    color_cycle = cycle('brgcmk')
+
+    for y, y_label in zip(ys, ys_label):
+        plt.plot(x, y, linewidth=3, color=next(color_cycle), label=y_label)
+
+    plt.legend(loc='upper left')
+
+    plt.gcf().autofmt_xdate()
+    plt.ticklabel_format(style='sci', axis='y', useMathText=True)
+    if save_path is not None:
+        plt.savefig(save_path)
     plt.close()
 
 
@@ -74,8 +137,8 @@ def read_data():
     import configparser
     conf = configparser.ConfigParser()
     conf.read('./config/config.ini', encoding='utf-8')
-    STOCK_DATA_PATH = conf.get('path', 'preprocessed_stock_data')
-    stock_data = pd.read_csv(STOCK_DATA_PATH, index_col=0)
+    stock_data_path = conf.get('path', 'preprocessed_stock_data')
+    stock_data = pd.read_csv(stock_data_path, index_col=0)
     stock_data = remove_anomaly(stock_data)
     return stock_data
 
@@ -164,6 +227,7 @@ def plot_results(log_folder, save_path: str, title='Learning Curve'):
     """
     plot the results
 
+    :param save_path:
     :param log_folder: (str) the save location of the results to plot
     :param title: (str) the title of the task to plot
     """
@@ -198,6 +262,7 @@ def test_sb():
 
         # env.render()
 
+
 if __name__ == '__main__':
     # ppo_perf = {'timesteps':    [0,         10e3,       25e3,       50e3,       10e4,       25e4,       50e4,       1e6,        2e6],
     #             'mean':         [126418.34, 217380.32,  298220.62,  313085.22,  360852.02,  409095.19,  429844.81,  497041.50,  530048.06],
@@ -206,10 +271,11 @@ if __name__ == '__main__':
 
     # plot_results('./models/A2C_test', './models/A2C_test/lerning_curve_smoothed.png')
     # test_sb()
-    data = read_data()
-    data = calc_daily_mean(data)
-    print('start:',data[0], 'end', data[-1])
-    print('up:', (data[-1]-data[0])/data[0])
+    # data = read_data()
+    # data = calc_daily_mean(data)
+    # print('start:',data[0], 'end', data[-1])
+    # print('up:', (data[-1]-data[0])/data[0])
+    print(get_quarter_dates(20180101, 20211231))
     # draw_avg_stock_price(data)
     # print(get_trade_dates(data))
     # # plot_daily(get_trade_dates(data), data['close'].tolist())
