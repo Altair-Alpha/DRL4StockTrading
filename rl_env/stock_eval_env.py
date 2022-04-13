@@ -11,6 +11,7 @@ from gym import spaces
 import global_var
 from util import *
 
+"""THIS CLASS IS OUTDATED! PLEASE USE StockTrainEnvV2 INSTEAD."""
 class StockEvalEnv(gym.Env):
     """符合OpenAI Gym接口的模拟股市环境"""
     metadata = {'render.modes': ['human']}
