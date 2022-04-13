@@ -43,6 +43,7 @@ def get_train_env(data: Dict[int, pd.DataFrame], stock_codes: list,
                                            'stock_codes': stock_codes, 'verbose': False})
     else:
         if log_path is not None:
+            StockTrainEnvV2()
             env = Monitor(StockTrainEnvV2(data, stock_codes, False), log_path)
         else:
             env = StockTrainEnvV2(data, stock_codes, False)
@@ -113,7 +114,7 @@ def eval_agent(agent: Agent, env_eval: StockEvalEnvV2, output_path: str) -> floa
             ret_agent = total_rewards / global_var.REWARD_SCALING
             reward_memory_agent = env_eval.reward_memory
             asset_memory_agent = [a[-1] for a in env_eval.asset_memory]
-            env_eval.save_result(output_path + 'total_assets.png', output_path + 'rewards.png')
+            env_eval.plot_memory(output_path)
             env_eval.dump_memory(output_path + 'env_memory/')
             break
 
@@ -137,7 +138,6 @@ def eval_agent(agent: Agent, env_eval: StockEvalEnvV2, output_path: str) -> floa
             ret_baseline = total_rewards / global_var.REWARD_SCALING
             reward_memory_baseline = env_eval.reward_memory
             asset_memory_baseline = [a[-1] for a in env_eval.asset_memory]
-            # env_eval.save_result('./figs/simulation/Hold_Eval/total_assets.png', './figs/simulation/Hold_Eval/rewards.png')
             break
 
     yearly_return_rate = 100 * ret_agent / global_var.INITIAL_BALANCE \
