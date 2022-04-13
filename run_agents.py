@@ -52,9 +52,9 @@ def get_train_env(data: Dict[int, pd.DataFrame], stock_codes: list,
 
 def eval_agent_simple(agent: Agent, env_eval: gym.Env) -> float:
     """
-    测试模型在模拟环境中完成一轮交易的表现
+    测试模型在模拟环境中完成一轮交易的表现，仅返回其收益值
 
-    :param agent: 模型
+    :param agent: 模型对象
     :param env_eval: 环境
     :return: 模型在环境中完成一轮交易的收益金额
     """
@@ -75,7 +75,91 @@ def eval_agent_simple(agent: Agent, env_eval: gym.Env) -> float:
     return ret
 
 
-def train_agent(data: pd.DataFrame, agent_name: str = 'A2C',
+def eval_agent(agent: Agent, env_eval: StockEvalEnvV2, output_path: str) -> float:
+    """
+    测试模型在模拟环境中完成一轮交易的表现，将模型的历史输出记录到csv文件，绘制与基线的每日收益和资产曲线对比图，同时返回收益值
+
+    :param data:
+    :param agent_name:
+    :param output_path:
+    """
+
+    # stock_codes = pp.get_stock_codes(data)
+    # data_eval = pp.subdata_by_range(data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
+    # data_eval = pp.to_daily_data(data_eval)
+    # env_eval = StockEvalEnvV2(data_eval, stock_codes, False)
+
+    # model_path = './models/EnvV2/PPO/0308_PPO_2M_10_Train/7.zip'
+    # output_path = './figs/simulation/EnvV2_PPO_2M_Eval1/'
+
+    # model_path = './models/EnvV2/CYB_Data/0407_A2C_1M_10_Train/1.zip'
+    # model_path = './models/EnvV2/CYB_Data/0409_PPO_2M_10_Train/6.zip'
+    # output_path = './figs/simulation/CYB_PPO_2M_Eval/'
+    # agent = agent_factory(agent_name, env_eval)
+    # agent.load(model_path)
+
+    os.makedirs(output_path, exist_ok=True)
+    os.makedirs(output_path + 'env_memory', exist_ok=True)
+
+    # Eval input agent
+    total_rewards = 0
+    state = env_eval.reset()
+    while True:
+        action = agent.act(state)
+        next_state, reward, done, _ = env_eval.step(action)
+        state = next_state
+        total_rewards += reward
+        if done:
+            ret_agent = total_rewards / global_var.REWARD_SCALING
+            reward_memory_agent = env_eval.reward_memory
+            asset_memory_agent = [a[-1] for a in env_eval.asset_memory]
+            env_eval.save_result(output_path + 'total_assets.png', output_path + 'rewards.png')
+            env_eval.dump_memory(output_path + 'env_memory/')
+            break
+
+    yearly_return_rate = 100 * ret_agent / global_var.INITIAL_BALANCE \
+                         / (util.get_year_diff(global_var.EVAL_START_DATE, global_var.EVAL_END_DATE) + 1)
+    print('RunAgent:',
+          'eval {} agent, average return {:.2f}, yearly return rate {:.2f}%'.format(agent.name,
+                                                                                    ret_agent,
+                                                                                    yearly_return_rate))
+
+    # Eval baseline agent
+    baseline_agent = agent_factory('Hold', env_eval)
+    total_rewards = 0
+    state = env_eval.reset()
+    while True:
+        action = baseline_agent.act(state)
+        next_state, reward, done, _ = env_eval.step(action)
+        state = next_state
+        total_rewards += reward
+        if done:
+            ret_baseline = total_rewards / global_var.REWARD_SCALING
+            reward_memory_baseline = env_eval.reward_memory
+            asset_memory_baseline = [a[-1] for a in env_eval.asset_memory]
+            # env_eval.save_result('./figs/simulation/Hold_Eval/total_assets.png', './figs/simulation/Hold_Eval/rewards.png')
+            break
+
+    yearly_return_rate = 100 * ret_agent / global_var.INITIAL_BALANCE \
+                         / (util.get_year_diff(global_var.EVAL_START_DATE, global_var.EVAL_END_DATE) + 1)
+    print('RunAgent:',
+          'baseline {} agent, average return {:.2f}, yearly return rate {:.2f}%'.format(baseline_agent.name,
+                                                                                        ret_baseline,
+                                                                                        yearly_return_rate))
+
+    # Plot compare graph
+    trade_dates = [datetime.strptime(str(d), '%Y%m%d').date() for d in env_eval.full_dates][:-1]
+    util.plot_daily_compare(x=trade_dates, y1=asset_memory_baseline, y2=asset_memory_agent,
+                            y1_label=f'{baseline_agent.name}(baseline)', y2_label=agent.name,
+                            diff_y_scale=False, save_path=output_path + 'total_assets_compare.png')
+    util.plot_daily_compare(x=trade_dates, y1=reward_memory_baseline, y2=reward_memory_agent,
+                            y1_label=f'{baseline_agent.name}(baseline)', y2_label=agent.name,
+                            diff_y_scale=False, save_path=output_path + 'daily_reward_compare.png')
+
+    return ret_agent
+
+
+def train_agent(data: pd.DataFrame, agent_name: str = 'Hold',
                 train_timesteps: int = 10000, eval_episode: int = 10,
                 model_save_path: str = None, log_path: str = None):
     """
@@ -110,11 +194,11 @@ def train_agent(data: pd.DataFrame, agent_name: str = 'A2C',
     if log_path is not None:
         util.plot_learning_curve(log_path, log_path + 'learning_curve.png')
 
+    # Evaluate the agent
     data_eval = pp.subdata_by_range(data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
     data_eval = pp.to_daily_data(data_eval)
+    agent.eval_mode()
     env_eval = StockEvalEnvV2(data_eval, stock_codes, verbose=False)
-
-    # Evaluate the agent
     if global_var.VERBOSE:
         print('RunAgent:', f'evaluating trained {agent_name} agent for {eval_episode} episodes:')
 
@@ -138,7 +222,7 @@ def train_agent(data: pd.DataFrame, agent_name: str = 'A2C',
           '{} agent average training time: {:.2f} minutes'.format(agent_name, (train_end_time - train_start_time) / 60))
 
 
-def train_agent_ntimes(data: pd.DataFrame, agent_name: str = 'PPO', train_timesteps: int = 10000,
+def train_agent_ntimes(data: pd.DataFrame, agent_name: str = 'Hold', train_timesteps: int = 10000,
                        n_train: int = 10, eval_episode: int = 10,
                        model_save_path: str = None, log_path: str = None):
     """
@@ -161,7 +245,7 @@ def train_agent_ntimes(data: pd.DataFrame, agent_name: str = 'PPO', train_timest
 
     # model_path = f'./models/EnvV2/A2C/0323_A2C_2M_10_Train/8.zip'
     # model_path = './models/EnvV2/PPO/0308_PPO_2M_10_Train/7.zip'
-    model_path = f'./models/EnvV2/CYB_Data/0409_PPO_2M_10_Train/'
+    # model_path = f'./models/EnvV2/CYB_Data/0409_PPO_2M_10_Train/'
     # model_save_path = model_path
 
     if model_save_path is not None:
@@ -189,19 +273,18 @@ def train_agent_ntimes(data: pd.DataFrame, agent_name: str = 'PPO', train_timest
         train_elapsed_times.append((train_end_time - train_start_time) / 60)
 
         if model_save_path is not None:
-            agent.save(model_path + f'{i+1}')
+            agent.save(model_save_path + f'{i+1}')
         if log_path is not None:
             util.plot_learning_curve(train_i_log_path, train_i_log_path + 'learning_curve.png')
 
-        # agent.load(model_path)
-
         # Eval
+        agent.eval_mode()
         env_eval = StockEvalEnvV2(data_eval, stock_codes, verbose=False)
         ret = 0
         for _ in range(eval_episode):
             ret += eval_agent_simple(agent, env_eval)
         ret /= eval_episode
-        print('RunAgent:', 'episode {:0>2d}/{}, average return {:.2f}'.format(i+1, eval_episode, ret))
+        print('RunAgent:', 'episode {:0>2d}/{}, average return {:.2f}'.format(i+1, n_train, ret))
         returns.append(ret)
 
     return_mean, return_std = np.mean(returns), np.std(returns)
@@ -215,52 +298,6 @@ def train_agent_ntimes(data: pd.DataFrame, agent_name: str = 'PPO', train_timest
                                                                                                     yearly_return_rate))
     print('RunAgent:',
           '{} agent average training time: {:.2f} minutes'.format(agent_name, np.mean(train_elapsed_times)))
-
-
-# TO BE FIXED
-def eval_agent_train(data: pd.DataFrame = None, model: str = 'PPO', episode: int = 1, x=0):
-    # if global_var.VERBOSE:
-    #     print('RunAgent:', f'evaluating {model} agent on training period(20100101-20171231).')
-    stock_codes = pp.get_stock_codes(data)
-
-    data_eval = pp.subdata_by_range(data, 20100101, 20171231)
-    data_eval = pp.to_daily_data(data_eval)
-    returns = []
-
-    model_path = './models/EnvV2/PPO/0308_PPO_2M_10_Train/'
-
-    for e in range(10):
-        # data_full = subdata_by_range(data, 20190101, 20211231)
-        # data_full = to_daily_data(data_full)
-        # env_full = StockTrainEnvV1(data_full, stock_codes, verbose=False)
-
-        env_eval = StockEvalEnvV2(data_eval, stock_codes, verbose=False)
-        agent = agent_factory(model, env_eval)
-        agent.load(model_path + f'/{x}.zip')
-
-        ret = 0
-        for i in range(episode):
-            total_rewards = 0
-            agent.initial = True
-            # print(global_var.SEP_LINE1)
-            # print('RunAgent:', f'episode {i+1}/{episode} begins.')
-            state = env_eval.reset()
-            while True:
-                action = agent.act(state)
-                next_state, reward, done, _ = env_eval.step(action)
-                state = next_state
-                total_rewards += reward
-                if done:
-                    ret += total_rewards / global_var.REWARD_SCALING
-                    break
-        ret /= episode
-        # print('RunAgent:', 'episode {:0>2d}/{}, avg return {:.2f}'.format(e + 1, 10, ret))
-        returns.append(ret)
-    return_mean, return_std = np.mean(returns), np.std(returns)
-    print('RunAgent:',
-          'total {} training, average return {:.2f}, std {:.2f}, return rate {:.2f}%'.format(10, return_mean,
-                                                                                             return_std,
-                                                                                             100 * return_mean / global_var.INITIAL_BALANCE))
 
 
 def track_train_agent_ntimes(data: pd.DataFrame, agent_name: str, track_train_timesteps: int,
@@ -286,21 +323,14 @@ def track_train_agent_ntimes(data: pd.DataFrame, agent_name: str, track_train_ti
         print('RunAgent:', f'track train {agent_name} agent on eval period, timesteps {track_train_timesteps}. '
                            f'Load base model from {base_model_path}')
 
-    returns = []
-
-    # model_path = f'./models/EnvV2/A2C/0323_A2C_2M_10_Train/'
-    # a2c_model_path = './models/EnvV2/CYB_Data/0407_A2C_2M_10_Train/10.zip'
-    # './models/EnvV2/A2C/0323_A2C_2M_10_Train/8.zip'
-    # ppo_model_path = './models/EnvV2/PPO/0308_PPO_2M_10_Train/7.zip'
-
     if not os.path.isfile(base_model_path):
         raise ValueError('Specified base model file does not exist')
 
     retrain_dates = util.get_quarter_dates(global_var.EVAL_START_DATE,
-                                           int(datetime.strftime(global_var.EVAL_END_DATE + relativedelta(days=1),
-                                                                 '%Y%m%d')))
-    for e in range(n_train):
+                                           int(datetime.strftime(global_var.EVAL_END_DATE + relativedelta(days=1), '%Y%m%d')))
 
+    returns = []
+    for e in range(n_train):
         # 追踪训练分多个时间段，无法记录单一训练日志，固定为None
         env_train = get_train_env(data_train, stock_codes, agent_name, log_path=None)
         # env_train = StockTrainEnvV2(data_train, stock_codes, verbose=False)
@@ -321,12 +351,14 @@ def track_train_agent_ntimes(data: pd.DataFrame, agent_name: str, track_train_ti
                 continue
 
             # perform trading on the next quarter
+            agent.eval_mode()
             env_eval.reset_date(retrain_dates[i], retrain_dates[i + 1])
             ret += eval_agent_simple(agent, env_eval)  # 每个季度的收益累加起来才是测试集上一次运行的总收益
             # print('RunAgent:', f'quarter {retrain_dates[i]} to {retrain_dates[i+1]} ended, current return {ret}. Training on its data.')
 
             # training on the quarter's data after trading
             if i != len(retrain_dates) - 2:  # 最后一个季度上不用训练
+                agent.train_mode()
                 env_train.reset_date(retrain_dates[i], retrain_dates[i + 1])
                 agent.learn(track_train_timesteps)
 
@@ -340,102 +372,6 @@ def track_train_agent_ntimes(data: pd.DataFrame, agent_name: str, track_train_ti
     print('RunAgent:',
           'total {} training, average return {:.2f}, std {:.2f},'
           ' yearly return rate {:.2f}%'.format(n_train, return_mean, return_std, yearly_return_rate))
-
-
-def eval_agent(data: pd.DataFrame = None, model: str = 'A2C', episode: int = 1):
-    stock_codes = pp.get_stock_codes(data)
-    data_eval = pp.subdata_by_range(data, 20180101, 20211231)
-    data_eval = pp.to_daily_data(data_eval)
-    env_eval = StockEvalEnvV2(data_eval, stock_codes, False)
-
-    # model_path = './models/EnvV2/PPO/0308_PPO_2M_10_Train/7.zip'
-    # output_path = './figs/simulation/EnvV2_PPO_2M_Eval1/'
-
-    # model_path = './models/EnvV2/CYB_Data/0407_A2C_1M_10_Train/1.zip'
-    model_path = './models/EnvV2/CYB_Data/0409_PPO_2M_10_Train/6.zip'
-    output_path = './figs/simulation/CYB_PPO_2M_Eval/'
-    os.makedirs(output_path, exist_ok=True)
-
-    agent = agent_factory(model, env_eval)
-    agent.load(model_path)
-
-    returns_agent = []
-    reward_memory_agent = []
-    return_memory_agent = []
-    asset_memory_agent = []
-    for i in range(episode):
-        total_rewards = 0
-        # print(global_var.SEP_LINE1)
-        # print('RunAgent:', f'episode {i+1}/{episode} begins.')
-        agent.initial = True
-
-        state = env_eval.reset()
-        while True:
-            action = agent.act(state)
-            next_state, reward, done, _ = env_eval.step(action)
-            state = next_state
-            total_rewards += reward
-            if done:
-                ret = total_rewards / global_var.REWARD_SCALING
-                print('RunAgent:', 'episode {:0>2d}/{}, return(total reward) {:.2f}'.format(i + 1, episode, ret))
-                returns_agent.append(ret)
-                reward_memory_agent = env_eval.reward_memory
-                # return_memory_agent = np.cumsum(reward_memory_agent)
-                asset_memory_agent = [a[-1] for a in env_eval.asset_memory]
-                env_eval.save_result(output_path + 'total_assets.png', output_path + 'rewards.png')
-                os.makedirs(output_path + 'env_memory', exist_ok=True)
-                env_eval.dump_memory(output_path + 'env_memory/')
-                break
-    print('Reward:', f'max:{max(reward_memory_agent)}', f'min:{min(reward_memory_agent)}')
-    return_mean, return_std = np.mean(returns_agent), np.std(returns_agent)
-    print('RunAgent:',
-          'total {} episodes, average return {:.2f}, std {:.2f}, return rate {:.2f}%'.format(episode, return_mean,
-                                                                                             return_std,
-                                                                                             100 * return_mean / global_var.INITIAL_BALANCE))
-
-    # return
-
-    baseline_agent = agent_factory('Hold', env_eval)
-    returns_baseline = []
-    reward_memory_baseline = []
-    return_memory_baseline = []
-    asset_memory_baseline = []
-    for i in range(episode):
-        total_rewards = 0
-        # print(global_var.SEP_LINE1)
-        # print('RunAgent:', f'episode {i+1}/{episode} begins.')
-        state = env_eval.reset()
-        while True:
-            action = baseline_agent.act(state)
-            next_state, reward, done, _ = env_eval.step(action)
-            state = next_state
-            total_rewards += reward
-            if done:
-                ret = total_rewards / global_var.REWARD_SCALING
-                print('RunAgent:', 'episode {:0>2d}/{}, return(total reward) {:.2f}'.format(i + 1, episode, ret))
-                returns_baseline.append(ret)
-                reward_memory_baseline = env_eval.reward_memory
-                # return_memory_baseline = np.cumsum(reward_memory_baseline)
-                asset_memory_baseline = [a[-1] for a in env_eval.asset_memory]
-                # env_eval.save_result('./figs/simulation/Hold_Eval/total_assets.png', './figs/simulation/Hold_Eval/rewards.png')
-                break
-    return_mean, return_std = np.mean(returns_baseline), np.std(returns_baseline)
-    print('RunAgent:',
-          'total {} episodes, average return {:.2f}, std {:.2f}, return rate {:.2f}%'.format(episode, return_mean,
-                                                                                             return_std,
-                                                                                             100 * return_mean / global_var.INITIAL_BALANCE))
-    x = [datetime.strptime(str(d), '%Y%m%d').date() for d in env_eval.dates][:-1]
-
-    # util.plot_daily_compare(x, return_memory_agent, return_memory_baseline, diff_y_scale=False, path='./figs/simulation/DDPG_500K_Eval/total_assets3.png', label_y1='DDPG')
-    util.plot_daily_compare(x, asset_memory_baseline, asset_memory_agent, y1_label='Hold(baseline)', y2_label=model,
-                            diff_y_scale=False, save_path=output_path + 'total_assets_compare.png')
-    util.plot_daily_compare(x, reward_memory_baseline, reward_memory_agent, y1_label='Hold(baseline)', y2_label=model,
-                            diff_y_scale=False, save_path=output_path + 'daily_reward_compare.png')
-
-    # # 绘制波动期（2020.05-2021.12）每日回报
-    # util.plot_daily_compare(x[540:900], reward_memory_agent[540:900], reward_memory_baseline[540:900],
-    #                         diff_y_scale=False,
-    #                         path='./figs/simulation/PPO_2M_Eval/daily_reward_compare_2020.png', label_y1='PPO')
 
 
 def track_train_agent(data: pd.DataFrame = None, model: str = 'A2C', track_train_step: int = 10000):
