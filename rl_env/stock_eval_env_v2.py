@@ -83,8 +83,12 @@ class StockEvalEnvV2(gym.Env):
                 [shares * price for shares, price in zip(self.state[1: self.stock_dim + 1],
                                                          self.state[self.stock_dim + 1: 2 * self.stock_dim + 1])])
 
+            self.asset_memory.append(
+                self.state[0: self.stock_dim + 1] + [begin_total_asset])  # state中 0至STOCK_DIM 项为（余额，持股）
+
+            self.action_memory.append(action)
             # 对每只股票的单日交易资金量范围为正负当前总资金量 * global_var.MAX_PERCENTAGE_PER_TRADE
-            action = action * (begin_total_asset * global_var.TRAIN_MAX_PERCENTAGE_PER_TRADE)
+            action = action * (begin_total_asset * global_var.EVAL_MAX_PERCENTAGE_PER_TRADE)
 
             if self.verbose:
                 print(global_var.SEP_LINE1)
@@ -116,6 +120,7 @@ class StockEvalEnvV2(gym.Env):
 
             # 当日收益为结束总资产减开始总资产
             self.reward = end_total_asset - begin_total_asset
+            self.reward_memory.append(self.reward)
 
             if self.verbose:
                 print(global_var.SEP_LINE1)

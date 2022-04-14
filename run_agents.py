@@ -2,7 +2,6 @@ import os
 import time
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-from typing import Dict
 
 import numpy as np
 import pandas as pd
@@ -19,13 +18,11 @@ from stock_train_env_v2 import StockTrainEnvV2
 from stock_eval_env_v2 import StockEvalEnvV2
 
 
-def get_train_env(data: Dict[int, pd.DataFrame], stock_codes: list,
-                  agent_name: str, log_path: str = None):
+def get_train_env(data: pd.DataFrame, agent_name: str, log_path: str = None):
     """
     根据Agent类型和是否输出日生成合适的训练环境
 
     :param data: 每日股票数据（请先调用to_daily_data处理成字典形式）
-    :param stock_codes: 股票代码列表
     :param agent_name: 模型名称，目前可选：'Dumb', 'Hold', 'A2C', 'PPO'
     :param log_path: 日志保存路径，如为None（默认）则不保存
     """
@@ -34,19 +31,16 @@ def get_train_env(data: Dict[int, pd.DataFrame], stock_codes: list,
     if agent_name == 'A2C' or agent_name == 'PPO':
         if log_path is not None:
             env = make_vec_env(StockTrainEnvV2, n_envs=4,
-                               env_kwargs={'daily_data': data,
-                                           'stock_codes': stock_codes, 'verbose': False},
+                               env_kwargs={'data': data, 'verbose': 0},
                                monitor_dir=log_path)
         else:
             env = make_vec_env(StockTrainEnvV2, n_envs=4,
-                               env_kwargs={'daily_data': data,
-                                           'stock_codes': stock_codes, 'verbose': False})
+                               env_kwargs={'data': data, 'verbose': 0})
     else:
         if log_path is not None:
-            StockTrainEnvV2()
-            env = Monitor(StockTrainEnvV2(data, stock_codes, False), log_path)
+            env = Monitor(StockTrainEnvV2(data, verbose=0), log_path)
         else:
-            env = StockTrainEnvV2(data, stock_codes, False)
+            env = StockTrainEnvV2(data, verbose=0)
 
     return env
 
@@ -55,7 +49,7 @@ def eval_agent_simple(agent: Agent, env_eval: gym.Env) -> float:
     """
     测试模型在模拟环境中完成一轮交易的表现，仅返回其收益值
 
-    :param agent: 模型对象
+    :param agent: Agent对象
     :param env_eval: 环境
     :return: 模型在环境中完成一轮交易的收益金额
     """
@@ -80,9 +74,10 @@ def eval_agent(agent: Agent, env_eval: StockEvalEnvV2, output_path: str) -> floa
     """
     测试模型在模拟环境中完成一轮交易的表现，将模型的历史输出记录到csv文件，绘制与基线的每日收益和资产曲线对比图，同时返回收益值
 
-    :param data:
-    :param agent_name:
-    :param output_path:
+    :param agent: Agent对象
+    :param env_eval: 环境
+    :param output_path: 图表输出路径
+    :return: 模型在环境中完成一轮交易的收益金额
     """
 
     # stock_codes = pp.get_stock_codes(data)
@@ -140,7 +135,7 @@ def eval_agent(agent: Agent, env_eval: StockEvalEnvV2, output_path: str) -> floa
             asset_memory_baseline = [a[-1] for a in env_eval.asset_memory]
             break
 
-    yearly_return_rate = 100 * ret_agent / global_var.INITIAL_BALANCE \
+    yearly_return_rate = 100 * ret_baseline / global_var.INITIAL_BALANCE \
                          / (util.get_year_diff(global_var.EVAL_START_DATE, global_var.EVAL_END_DATE) + 1)
     print('RunAgent:',
           'baseline {} agent, average return {:.2f}, yearly return rate {:.2f}%'.format(baseline_agent.name,
@@ -159,9 +154,8 @@ def eval_agent(agent: Agent, env_eval: StockEvalEnvV2, output_path: str) -> floa
     return ret_agent
 
 
-def train_agent(data: pd.DataFrame, agent_name: str = 'Hold',
-                train_timesteps: int = 10000, eval_episode: int = 10,
-                model_save_path: str = None, log_path: str = None):
+def train_agent(data: pd.DataFrame, agent_name: str, train_timesteps: int = 10000,
+                eval_episode: int = 10, model_save_path: str = None, log_path: str = None):
     """
     训练一个模型，并测试其表现
 
@@ -173,15 +167,14 @@ def train_agent(data: pd.DataFrame, agent_name: str = 'Hold',
     :param log_path: 模型训练日志保存路径，如为None（默认）则不保存
     """
 
-    stock_codes = pp.get_stock_codes(data)
     data_train = pp.subdata_by_range(data, global_var.TRAIN_START_DATE, global_var.TRAIN_END_DATE)
-    data_train = pp.to_daily_data(data_train)
-    env_train = get_train_env(data_train, stock_codes, agent_name, log_path)
+    data_eval = pp.subdata_by_range(data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
 
     # Create and train the agent
     if global_var.VERBOSE:
         print('RunAgent:', f'training {agent_name} agent, timesteps {train_timesteps}')
 
+    env_train = get_train_env(data_train, agent_name, log_path)
     agent = agent_factory(agent_name, env_train)
     train_start_time = time.time()  # record training time
     agent.learn(timesteps=train_timesteps)
@@ -195,10 +188,8 @@ def train_agent(data: pd.DataFrame, agent_name: str = 'Hold',
         util.plot_learning_curve(log_path, log_path + 'learning_curve.png')
 
     # Evaluate the agent
-    data_eval = pp.subdata_by_range(data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
-    data_eval = pp.to_daily_data(data_eval)
     agent.eval_mode()
-    env_eval = StockEvalEnvV2(data_eval, stock_codes, verbose=False)
+    env_eval = StockEvalEnvV2(data_eval, verbose=0)
     if global_var.VERBOSE:
         print('RunAgent:', f'evaluating trained {agent_name} agent for {eval_episode} episodes:')
 
@@ -222,7 +213,7 @@ def train_agent(data: pd.DataFrame, agent_name: str = 'Hold',
           '{} agent average training time: {:.2f} minutes'.format(agent_name, (train_end_time - train_start_time) / 60))
 
 
-def train_agent_ntimes(data: pd.DataFrame, agent_name: str = 'Hold', train_timesteps: int = 10000,
+def train_agent_ntimes(data: pd.DataFrame, agent_name: str, train_timesteps: int = 10000,
                        n_train: int = 10, eval_episode: int = 10,
                        model_save_path: str = None, log_path: str = None):
     """
@@ -237,23 +228,15 @@ def train_agent_ntimes(data: pd.DataFrame, agent_name: str = 'Hold', train_times
     :param log_path: 模型训练日志保存路径，如为None（默认）则不保存，否则n_train次训练的日志分别保存至该目录下的1-n目录中
     """
 
-    stock_codes = pp.get_stock_codes(data)
     data_train = pp.subdata_by_range(data, global_var.TRAIN_START_DATE, global_var.TRAIN_END_DATE)
-    data_train = pp.to_daily_data(data_train)
     data_eval = pp.subdata_by_range(data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
-    data_eval = pp.to_daily_data(data_eval)
-
-    # model_path = f'./models/EnvV2/A2C/0323_A2C_2M_10_Train/8.zip'
-    # model_path = './models/EnvV2/PPO/0308_PPO_2M_10_Train/7.zip'
-    # model_path = f'./models/EnvV2/CYB_Data/0409_PPO_2M_10_Train/'
-    # model_save_path = model_path
 
     if model_save_path is not None:
         os.makedirs(model_save_path, exist_ok=True)
+        print('RunAgent:', f'models will be saved to {model_save_path}')
 
     if global_var.VERBOSE:
-        print('RunAgent:',
-              f'training and evaluating {agent_name} agent for {n_train} times, timesteps {train_timesteps}')
+        print('RunAgent:', f'training and evaluating {agent_name} agent for {n_train} times, timesteps {train_timesteps}')
 
     returns = []
     train_elapsed_times = []
@@ -265,7 +248,7 @@ def train_agent_ntimes(data: pd.DataFrame, agent_name: str = 'Hold', train_times
             os.makedirs(train_i_log_path, exist_ok=True)
 
         # Train
-        env_train = get_train_env(data_train, stock_codes, agent_name, train_i_log_path)
+        env_train = get_train_env(data_train, agent_name, train_i_log_path)
         agent = agent_factory(agent_name, env_train)
         train_start_time = time.time()
         agent.learn(timesteps=train_timesteps)
@@ -279,7 +262,7 @@ def train_agent_ntimes(data: pd.DataFrame, agent_name: str = 'Hold', train_times
 
         # Eval
         agent.eval_mode()
-        env_eval = StockEvalEnvV2(data_eval, stock_codes, verbose=False)
+        env_eval = StockEvalEnvV2(data_eval, verbose=0)
         ret = 0
         for _ in range(eval_episode):
             ret += eval_agent_simple(agent, env_eval)
@@ -304,7 +287,7 @@ def track_train_agent_ntimes(data: pd.DataFrame, agent_name: str, track_train_ti
                              base_model_path: str, n_train: int = 10):
     """
     在一个基础预训练模型的基础上，在测试集上每完成一个季度的交易后使用该段时间上的数据继续训练该模型，使模型能追踪近期趋势。
-    共训练n_train次，测试其平均表现
+    共训练n_train次，测试其平均表现（仅输出收益率数字）。
 
     :param data: 预处理后的完整股票数据
     :param agent_name: Agent名称，目前可选：'Dumb', 'Hold', 'A2C', 'PPO'
@@ -313,36 +296,35 @@ def track_train_agent_ntimes(data: pd.DataFrame, agent_name: str, track_train_ti
     :param n_train: 重复训练次数
     """
 
-    stock_codes = pp.get_stock_codes(data)
-    data_train = pp.subdata_by_range(data, global_var.TRAIN_START_DATE, global_var.TRAIN_END_DATE)
-    data_train = pp.to_daily_data(data_train)
-    data_eval = pp.subdata_by_range(data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
-    data_eval = pp.to_daily_data(data_eval)
-
     if global_var.VERBOSE:
-        print('RunAgent:', f'track train {agent_name} agent on eval period, timesteps {track_train_timesteps}. '
+        print('RunAgent:', f'track train {agent_name} agent on eval period for {n_train} times, timesteps {track_train_timesteps}. '
                            f'Load base model from {base_model_path}')
 
     if not os.path.isfile(base_model_path):
         raise ValueError('Specified base model file does not exist')
 
+    # 由于是在测试期上继续训练，因此data_train和data_eval的范围相同
+    data_train = pp.subdata_by_range(data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
+    data_eval = pp.subdata_by_range(data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
+
     retrain_dates = util.get_quarter_dates(global_var.EVAL_START_DATE,
-                                           int(datetime.strftime(global_var.EVAL_END_DATE + relativedelta(days=1), '%Y%m%d')))
+                                           int(datetime.strftime(
+                                               datetime.strptime(str(global_var.EVAL_END_DATE), '%Y%m%d') + relativedelta(days=1),
+                                           '%Y%m%d')))
 
     returns = []
     for e in range(n_train):
-        # 追踪训练分多个时间段，无法记录单一训练日志，固定为None
-        env_train = get_train_env(data_train, stock_codes, agent_name, log_path=None)
-        # env_train = StockTrainEnvV2(data_train, stock_codes, verbose=False)
+        # 追踪训练分多个时间段，不能用多环境，也无法记录训练日志
+        env_train = StockTrainEnvV2(data_train, verbose=0)
 
-        # load a pre-trained model
+        # 加载预训练模型
         agent = agent_factory(agent_name, env_train)
         if isinstance(agent, A2CAgent) or isinstance(agent, PPOAgent):
-            agent.model.set_parameters(base_model_path)  # 因为agent.load会破坏构造时传入的环境，因此使用set_parameters直接加载模型的参数
+            agent.model.set_parameters(base_model_path)
 
-        env_eval = StockEvalEnvV2(data_eval, stock_codes, verbose=False)
-
-        # Evaluate and retrain on every quarter
+        # 在每个季度上测试和继续训练
+        env_eval = StockEvalEnvV2(data_eval, verbose=0)
+        state = env_eval.reset()
         ret = 0
         for i in range(len(retrain_dates) - 1):
             # 如果该季度区间内没有任何数据，则跳过
@@ -352,9 +334,19 @@ def track_train_agent_ntimes(data: pd.DataFrame, agent_name: str, track_train_ti
 
             # perform trading on the next quarter
             agent.eval_mode()
-            env_eval.reset_date(retrain_dates[i], retrain_dates[i + 1])
-            ret += eval_agent_simple(agent, env_eval)  # 每个季度的收益累加起来才是测试集上一次运行的总收益
-            # print('RunAgent:', f'quarter {retrain_dates[i]} to {retrain_dates[i+1]} ended, current return {ret}. Training on its data.')
+            env_eval.reset_date(retrain_dates[i], retrain_dates[i+1], is_last_section=(i==len(retrain_dates)-2))
+            # 多个分段间状态连续，不能用eval_agent_simple否则会在分段处重置回初始状态
+            total_rewards = 0
+            while True:
+                action = agent.act(state)
+                next_state, reward, done, _ = env_eval.step(action)
+                state = next_state
+                total_rewards += reward
+                if done:
+                    ret += total_rewards / global_var.REWARD_SCALING
+                    break
+
+            # print('RunAgent:', f'quarter {retrain_dates[i]} to {retrain_dates[i+1]} ended, current return {ret:.2f}. Training on its data.')
 
             # training on the quarter's data after trading
             if i != len(retrain_dates) - 2:  # 最后一个季度上不用训练
@@ -362,7 +354,7 @@ def track_train_agent_ntimes(data: pd.DataFrame, agent_name: str, track_train_ti
                 env_train.reset_date(retrain_dates[i], retrain_dates[i + 1])
                 agent.learn(track_train_timesteps)
 
-        print('RunAgent:', 'episode {:0>2d}/{}, avg return {:.2f}'.format(e + 1, 10, ret))
+        print('RunAgent:', 'episode {:0>2d}/{}, avg return {:.2f}'.format(e + 1, n_train, ret))
         returns.append(ret)
 
     return_mean, return_std = np.mean(returns), np.std(returns)
@@ -374,36 +366,41 @@ def track_train_agent_ntimes(data: pd.DataFrame, agent_name: str, track_train_ti
           ' yearly return rate {:.2f}%'.format(n_train, return_mean, return_std, yearly_return_rate))
 
 
-def track_train_agent(data: pd.DataFrame = None, model: str = 'A2C', track_train_step: int = 10000):
+def track_train_agent(data: pd.DataFrame, agent_name: str, track_train_timesteps: int,
+                      base_model_path: str, output_path: str) -> float:
+    """
+    在一个基础预训练模型的基础上，在测试集上每完成一个季度的交易后使用该段时间上的数据继续训练该模型，使模型能追踪近期趋势。
+    训练+测试一次，输出历史状态以及追踪训练的Agent和不进行追踪训练以及基线的资产曲线对比图
+
+    :param data: 预处理后的完整股票数据
+    :param agent_name: Agent名称，目前可选：'Dumb', 'Hold', 'A2C', 'PPO'
+    :param track_train_timesteps: 模型在每个时间窗口上继续训练的交互步数
+    :param base_model_path: 基础模型文件路径
+    :param output_path: 图表输出路径
+    :return: 模型在环境中完成一轮交易的收益金额
+    """
+
     if global_var.VERBOSE:
-        print('RunAgent:', f'evaluating track trained {model} agent.')
-    stock_codes = pp.get_stock_codes(data)
-    data_train = pp.subdata_by_range(data, 20100101, 20211231)
-    data_train = pp.to_daily_data(data_train)
-    data_eval = pp.subdata_by_range(data, 20180101, 20211231)
-    data_eval = pp.to_daily_data(data_eval)
-    returns = []
-    train_times = []
+        print('RunAgent:', f'track train {agent_name} agent on eval period, timesteps {track_train_timesteps}. '
+                           f'Load base model from {base_model_path}, outputing eval result at {output_path}')
 
-    # model_path = f'./models/EnvV2/A2C/0323_A2C_2M_10_Train/'
-    a2c_model_path = './models/EnvV2/A2C/0323_A2C_2M_10_Train/8.zip'
-    # './models/EnvV2/CYB_Data/0407_A2C_2M_10_Train/10.zip'
-    ppo_model_path = './models/EnvV2/PPO/0308_PPO_2M_10_Train/7.zip'
+    if not os.path.isfile(base_model_path):
+        raise ValueError('Specified base model file does not exist')
 
-    model_path = a2c_model_path
-    output_path = './figs/simulation/EnvV2_A2C_2M_Track_10K_Eval/'
+    data_train = pp.subdata_by_range(data, global_var.TRAIN_START_DATE, global_var.TRAIN_END_DATE)
+    data_eval = pp.subdata_by_range(data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
+
     os.makedirs(output_path, exist_ok=True)
-    if global_var.VERBOSE:
-        print('RunAgent:', f'original model file at {model_path}. outputing eval result at {output_path}')
 
     ###################### Track Trained Model Perf ######################
-    retrain_dates = util.get_quarter_dates(20180101, 20220101)
+    retrain_dates = util.get_quarter_dates(global_var.EVAL_START_DATE,
+                                           int(datetime.strftime(global_var.EVAL_END_DATE + relativedelta(days=1), '%Y%m%d')))
 
-    env_train = StockTrainEnvV2(data_train, stock_codes, verbose=False)
-    env_eval = StockEvalEnvV2(data_eval, stock_codes, verbose=False)
+    env_train = get
+    env_eval = StockEvalEnvV2(data_eval, verbose=0)
 
     # load a pre-trained model
-    agent_track = agent_factory(model, env_train)
+    agent_track = agent_factory(agent_name, env_train)
 
     # agent.load() will clear out the env so that the agent can't learn anymore
     # therefore use set_parameters() to load the model
@@ -435,7 +432,7 @@ def track_train_agent(data: pd.DataFrame = None, model: str = 'A2C', track_train
         # continue training on the quarter's data after trading
         if i != len(retrain_dates) - 2:
             env_train.reset_date(retrain_dates[i], retrain_dates[i + 1])
-            agent_track.learn(track_train_step)
+            agent_track.learn(track_train_timesteps)
     reward_memory_agent_track = env_eval.reward_memory
     asset_memory_agent_track = [a[-1] for a in env_eval.asset_memory]
     os.makedirs(output_path + 'env_memory', exist_ok=True)
@@ -448,7 +445,7 @@ def track_train_agent(data: pd.DataFrame = None, model: str = 'A2C', track_train
     ###################### Original Model Perf (No Track Train) ######################
     while True:
         env_eval = StockEvalEnvV2(data_eval, stock_codes, verbose=False)
-        original_agent = agent_factory(model, env_eval)
+        original_agent = agent_factory(agent_name, env_eval)
         original_agent.load(model_path)
 
         total_rewards = 0
@@ -491,11 +488,13 @@ def track_train_agent(data: pd.DataFrame = None, model: str = 'A2C', track_train
     dates = [datetime.strptime(str(d), '%Y%m%d').date() for d in env_eval.full_dates][:-1]
 
     util.plot_daily_multi_y(x=dates, ys=[asset_memory_agent_track, asset_memory_original_agent, asset_memory_baseline],
-                            ys_label=[model + f'(Track Step={track_train_step})', model + '(No Track Train)',
+                            ys_label=[agent_name + f'(Track Step={track_train_timesteps})', agent_name + '(No Track Train)',
                                       'Hold(Baseline)'],
                             save_path=output_path + 'total_assets_compare.png')
     util.plot_daily_multi_y(x=dates,
                             ys=[reward_memory_agent_track, reward_memory_original_agent, reward_memory_baseline],
-                            ys_label=[model + f'(Track Step={track_train_step})', model + '(No Track Train)',
+                            ys_label=[agent_name + f'(Track Step={track_train_timesteps})', agent_name + '(No Track Train)',
                                       'Hold(Baseline)'],
                             save_path=output_path + 'daily_reward_compare.png')
+
+    return ret_agent_track

@@ -1,4 +1,4 @@
-from datetime import timedelta
+from dateutil.relativedelta import relativedelta
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from stable_baselines3.common.monitor import load_results
@@ -8,17 +8,38 @@ from preprocessor import *
 
 
 def get_quarter_dates(start_date: int, end_date: int) -> list:
+    """
+    获取两个日期间的以每个季度（92天）为间隔的日期列表
+
+    :param start_date: 8位整数表示的开始日期
+    :param end_date: 8位整数表示的结束日期
+    :return: 8位整数的日期列表（包括开始和结束日期）
+    """
     start_date = datetime.strptime(str(start_date), '%Y%m%d')
     end_date = datetime.strptime(str(end_date), '%Y%m%d')
     cur_date = start_date
     date_lst = []
     while True:
         date_lst.append(int(datetime.strftime(cur_date, '%Y%m%d')))
-        cur_date = cur_date + timedelta(days=92)
+        cur_date = cur_date + relativedelta(days=92)
         if cur_date > end_date:
             break
     date_lst.append(int(datetime.strftime(end_date, '%Y%m%d')))
     return date_lst
+
+
+def get_year_diff(start_date: int, end_date: int):
+    """
+    获取两个日期间相差的年数。注意该函数不会计算相差天数，20000101-20011231也会被算为1年。
+
+    :param start_date: 8位整数表示的开始日期
+    :param end_date: 8位整数表示的结束日期
+    :return: 相差年数（绝对值）
+    """
+    start_date = datetime.strptime(str(start_date), '%Y%m%d')
+    end_date = datetime.strptime(str(end_date), '%Y%m%d')
+    diff = relativedelta(start_date, end_date)
+    return abs(diff.years)
 
 
 def plot_daily(x: list, y: list, path: str = None):
@@ -31,13 +52,13 @@ def plot_daily(x: list, y: list, path: str = None):
     """
     # plt.style.use('seaborn')
     plt.figure(figsize=(30, 10))
-    plt.rc('font', size=20)
+    plt.rc('font', size=18)
     plt.margins(x=0.02)
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
-    interval = np.clip(len(x) // 10, 1, 200)  # 调整横轴日期间距，避免过挤
+    interval = np.clip(len(x) // 12, 1, 200)  # 调整横轴日期间距，避免过挤
     plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=interval))
-    plt.xlabel('Date')
-    plt.ylabel('TotalAsset')
+    # plt.xlabel('Date')
+    # plt.ylabel('TotalAsset')
     plt.plot(x, y, linewidth=3, color='blue')
     plt.gcf().autofmt_xdate()
     plt.ticklabel_format(style='sci', axis='y', useMathText=True)
@@ -137,7 +158,7 @@ def read_data():
     import configparser
     conf = configparser.ConfigParser()
     conf.read('./config/config.ini', encoding='utf-8')
-    stock_data_path = conf.get('path', 'preprocessed_stock_data')
+    stock_data_path = './data/cybstock_10_preprocessed.csv' #conf.get('path', 'preprocessed_stock_data')
     stock_data = pd.read_csv(stock_data_path, index_col=0)
     stock_data = remove_anomaly(stock_data)
     return stock_data
@@ -223,15 +244,15 @@ def moving_average(values, window):
     return np.convolve(values, weights, 'valid')
 
 
-def plot_results(log_folder, save_path: str, title='Learning Curve'):
+def plot_learning_curve(in_log_path, out_path: str, title='Learning Curve'):
     """
     plot the results
 
-    :param save_path:
-    :param log_folder: (str) the save location of the results to plot
+    :param out_path:
+    :param in_log_path: (str) the save location of the results to plot
     :param title: (str) the title of the task to plot
     """
-    x, y = ts2xy(load_results(log_folder), 'timesteps')
+    x, y = ts2xy(load_results(in_log_path), 'timesteps')
     # y = moving_average(y, window=5)
     # Truncate x
     x = x[len(x) - len(y):]
@@ -241,7 +262,7 @@ def plot_results(log_folder, save_path: str, title='Learning Curve'):
     plt.xlabel('Timesteps')
     plt.ylabel('Rewards')
     plt.title(title + " Smoothed")
-    plt.savefig(save_path)
+    plt.savefig(out_path)
     plt.close()
 
 
@@ -252,7 +273,7 @@ def test_sb():
     env = gym.make("Pendulum-v0")
     model = TD3("MlpPolicy", env, verbose=1)
     model.learn(total_timesteps=10000)
-    plot_results('./models/A2C_test/tuned', './models/A2C_test/tuned/learning_curve.png')
+    plot_learning_curve('./models/A2C_test/tuned', './models/A2C_test/tuned/learning_curve.png')
 
     obs = env.reset()
     while True:
@@ -273,10 +294,22 @@ if __name__ == '__main__':
     # test_sb()
     # data = read_data()
     # data = calc_daily_mean(data)
-    # print('start:',data[0], 'end', data[-1])
-    # print('up:', (data[-1]-data[0])/data[0])
-    print(get_quarter_dates(20180101, 20211231))
-    # draw_avg_stock_price(data)
+    # print(get_year_diff(20100101, 20211231))
     # print(get_trade_dates(data))
     # # plot_daily(get_trade_dates(data), data['close'].tolist())
     # plot_daily(get_trade_dates(data), calc_daily_mean(data))
+
+    # data = read_data()
+    # dates = get_trade_dates(data)
+    # data = subdata_by_range(data, 20180101, 20211231)
+    # data = calc_daily_mean(data)
+    # print(f'start: {data[0]}, end: {data[-1]}, rate: {(data[-1] - data[0])/data[0]*100}')
+    # # plot_daily(dates, data, './figs/stock_price/cyb10/new_avg10.png')
+    # data = to_per_stock_data(data)
+    # for k, v in data.items():
+    #     # print('DATESLEN:', len(dates))
+    #     # print('VALUELEN:', len(v['close'].tolist()))
+    #     plot_daily(dates, v['close'].tolist(), f'./figs/stock_price/cyb10/{k}.png')
+
+    l = [2146769.06, 2309249.52, 1529266.00, 1107423.98, 1069376.13, 1628285.55, 2308651.76, 2706041.63, 3214475.75]
+    print('mean', np.mean(l), 'std', np.std(l))
