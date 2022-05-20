@@ -1,33 +1,32 @@
 import os
 import time
 from datetime import datetime
-from dateutil.relativedelta import relativedelta
 
+import gym
 import numpy as np
 import pandas as pd
-import gym
-from stable_baselines3.common.monitor import Monitor
+from dateutil.relativedelta import relativedelta
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.monitor import Monitor
 
 import global_var
-import util
 import preprocessor as pp
+import util
+from agents import Agent, HoldAgent, A2CAgent, PPOAgent
 from agents import agent_factory
-from agents import Agent, DumbAgent, HoldAgent, A2CAgent, PPOAgent
-from stock_train_env_v2 import StockTrainEnvV2
 from stock_eval_env_v2 import StockEvalEnvV2
+from stock_train_env_v2 import StockTrainEnvV2
 
 
-def get_train_env(data: pd.DataFrame, agent_name: str, log_path: str = None):
+def make_train_env(data: pd.DataFrame, agent_name: str, log_path: str = None):
     """
-    根据Agent类型和是否输出日生成合适的训练环境
+    根据Agent类型以及是否输出日志生成合适的训练环境
 
     :param data: 每日股票数据（请先调用to_daily_data处理成字典形式）
     :param agent_name: 模型名称，目前可选：'Dumb', 'Hold', 'A2C', 'PPO'
     :param log_path: 日志保存路径，如为None（默认）则不保存
     """
     # A2C and PPO support multi-environment training
-
     if agent_name == 'A2C' or agent_name == 'PPO':
         if log_path is not None:
             env = make_vec_env(StockTrainEnvV2, n_envs=4,
@@ -53,7 +52,6 @@ def eval_agent_simple(agent: Agent, env_eval: gym.Env) -> float:
     :param env_eval: 环境
     :return: 模型在环境中完成一轮交易的收益金额
     """
-
     if isinstance(agent, HoldAgent):
         agent.is_first_day = True
 
@@ -79,21 +77,6 @@ def eval_agent(agent: Agent, env_eval: StockEvalEnvV2, output_path: str) -> floa
     :param output_path: 图表输出路径
     :return: 模型在环境中完成一轮交易的收益金额
     """
-
-    # stock_codes = pp.get_stock_codes(data)
-    # data_eval = pp.subdata_by_range(data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
-    # data_eval = pp.to_daily_data(data_eval)
-    # env_eval = StockEvalEnvV2(data_eval, stock_codes, False)
-
-    # model_path = './models/EnvV2/PPO/0308_PPO_2M_10_Train/7.zip'
-    # output_path = './figs/simulation/EnvV2_PPO_2M_Eval1/'
-
-    # model_path = './models/EnvV2/CYB_Data/0407_A2C_1M_10_Train/1.zip'
-    # model_path = './models/EnvV2/CYB_Data/0409_PPO_2M_10_Train/6.zip'
-    # output_path = './figs/simulation/CYB_PPO_2M_Eval/'
-    # agent = agent_factory(agent_name, env_eval)
-    # agent.load(model_path)
-
     os.makedirs(output_path, exist_ok=True)
     os.makedirs(output_path + 'env_memory', exist_ok=True)
 
@@ -142,7 +125,7 @@ def eval_agent(agent: Agent, env_eval: StockEvalEnvV2, output_path: str) -> floa
                                                                                         ret_baseline,
                                                                                         yearly_return_rate))
 
-    # Plot compare graph
+    # Plot compare figure
     trade_dates = [datetime.strptime(str(d), '%Y%m%d').date() for d in env_eval.full_dates][:-1]
     util.plot_daily_compare(x=trade_dates, y1=asset_memory_baseline, y2=asset_memory_agent,
                             y1_label=f'{baseline_agent.name}(baseline)', y2_label=agent.name,
@@ -150,12 +133,11 @@ def eval_agent(agent: Agent, env_eval: StockEvalEnvV2, output_path: str) -> floa
     util.plot_daily_compare(x=trade_dates, y1=reward_memory_baseline, y2=reward_memory_agent,
                             y1_label=f'{baseline_agent.name}(baseline)', y2_label=agent.name,
                             diff_y_scale=False, save_path=output_path + 'daily_reward_compare.png')
-
     return ret_agent
 
 
 def train_agent(data: pd.DataFrame, agent_name: str, train_timesteps: int = 10000,
-                eval_episode: int = 10, model_save_path: str = None, log_path: str = None):
+                eval_episode: int = 1, model_save_path: str = None, log_path: str = None):
     """
     训练一个模型，并测试其表现
 
@@ -166,7 +148,6 @@ def train_agent(data: pd.DataFrame, agent_name: str, train_timesteps: int = 1000
     :param model_save_path: 模型保存路径，如为None（默认）则不保存
     :param log_path: 模型训练日志保存路径，如为None（默认）则不保存
     """
-
     data_train = pp.subdata_by_range(data, global_var.TRAIN_START_DATE, global_var.TRAIN_END_DATE)
     data_eval = pp.subdata_by_range(data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
 
@@ -174,7 +155,7 @@ def train_agent(data: pd.DataFrame, agent_name: str, train_timesteps: int = 1000
     if global_var.VERBOSE:
         print('RunAgent:', f'training {agent_name} agent, timesteps {train_timesteps}')
 
-    env_train = get_train_env(data_train, agent_name, log_path)
+    env_train = make_train_env(data_train, agent_name, log_path)
     agent = agent_factory(agent_name, env_train)
     train_start_time = time.time()  # record training time
     agent.learn(timesteps=train_timesteps)
@@ -214,7 +195,7 @@ def train_agent(data: pd.DataFrame, agent_name: str, train_timesteps: int = 1000
 
 
 def train_agent_ntimes(data: pd.DataFrame, agent_name: str, train_timesteps: int = 10000,
-                       n_train: int = 10, eval_episode: int = 10,
+                       n_train: int = 10, eval_episode: int = 1,
                        model_save_path: str = None, log_path: str = None):
     """
     训练一种模型n_train次，测试其平均表现
@@ -227,7 +208,6 @@ def train_agent_ntimes(data: pd.DataFrame, agent_name: str, train_timesteps: int
     :param model_save_path: 模型保存路径，如为None（默认）则不保存，否则n_train个模型分别保存至该目录下的1.zip-n.zip文件
     :param log_path: 模型训练日志保存路径，如为None（默认）则不保存，否则n_train次训练的日志分别保存至该目录下的1-n目录中
     """
-
     data_train = pp.subdata_by_range(data, global_var.TRAIN_START_DATE, global_var.TRAIN_END_DATE)
     data_eval = pp.subdata_by_range(data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
 
@@ -248,7 +228,7 @@ def train_agent_ntimes(data: pd.DataFrame, agent_name: str, train_timesteps: int
             os.makedirs(train_i_log_path, exist_ok=True)
 
         # Train
-        env_train = get_train_env(data_train, agent_name, train_i_log_path)
+        env_train = make_train_env(data_train, agent_name, train_i_log_path)
         agent = agent_factory(agent_name, env_train)
         train_start_time = time.time()
         agent.learn(timesteps=train_timesteps)
@@ -283,6 +263,142 @@ def train_agent_ntimes(data: pd.DataFrame, agent_name: str, train_timesteps: int
           '{} agent average training time: {:.2f} minutes'.format(agent_name, np.mean(train_elapsed_times)))
 
 
+def track_train_agent(data: pd.DataFrame, agent_name: str, track_train_timesteps: int,
+                      base_model_path: str, output_path: str) -> float:
+    """
+    在一个基础预训练模型的基础上，在测试集上每完成一个季度的交易后使用该段时间上的数据继续训练该模型，使模型能追踪近期趋势。
+    训练+测试一次，输出历史状态以及追踪训练的Agent和不进行追踪训练以及基线的资产曲线对比图
+
+    :param data: 预处理后的完整股票数据
+    :param agent_name: Agent名称，目前可选：'Dumb', 'Hold', 'A2C', 'PPO'
+    :param track_train_timesteps: 模型在每个时间窗口上继续训练的交互步数
+    :param base_model_path: 基础模型文件路径
+    :param output_path: 图表输出路径
+    :return: 模型在环境中完成一轮交易的收益金额
+    """
+    if global_var.VERBOSE:
+        print('RunAgent:', f'track train {agent_name} agent on eval period, timesteps {track_train_timesteps}. '
+                           f'Load base model from {base_model_path}, outputing eval result at {output_path}')
+
+    if not os.path.isfile(base_model_path):
+        raise ValueError('Specified base model file does not exist')
+
+    data_train = pp.subdata_by_range(data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
+    data_eval = pp.subdata_by_range(data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
+    env_train = StockTrainEnvV2(data_train, verbose=0)
+    env_eval = StockEvalEnvV2(data_eval, verbose=0)
+
+    os.makedirs(output_path, exist_ok=True)
+
+    ###################### Track Trained Model Perf ######################
+    retrain_dates = util.get_quarter_dates(global_var.EVAL_START_DATE,
+                                           int(datetime.strftime(
+                                               datetime.strptime(str(global_var.EVAL_END_DATE), '%Y%m%d') + relativedelta(days=1),
+                                               '%Y%m%d')))
+
+    # load a pre-trained model
+    agent_track = agent_factory(agent_name, env_train)
+
+    # agent.load() will clear out the env so that the agent can't learn anymore
+    # therefore use set_parameters() to load the model
+    if isinstance(agent_track, A2CAgent) or isinstance(agent_track, PPOAgent):
+        agent_track.model.set_parameters(base_model_path)
+
+    state = env_eval.reset()
+    ret_agent_track = 0
+    for i in range(len(retrain_dates) - 1):
+        # perform trading on the next quarter
+        if not env_train.check_interval_valid(retrain_dates[i], retrain_dates[i + 1]):
+            # print(f'Quarter {retrain_dates[i]} to {retrain_dates[i + 1]} has no data, therefore skipped.')
+            continue
+        agent_track.eval_mode()
+        env_eval.reset_date(retrain_dates[i], retrain_dates[i + 1], is_last_section=(i == len(retrain_dates) - 2))
+        total_rewards = 0
+        while True:
+            action = agent_track.act(state)
+            next_state, reward, done, _ = env_eval.step(action)
+            state = next_state
+            total_rewards += reward
+            if done:
+                ret_agent_track += total_rewards / global_var.REWARD_SCALING
+                break
+        # continue training on the quarter's data after trading
+        if i != len(retrain_dates) - 2:
+            agent_track.train_mode()
+            env_train.reset_date(retrain_dates[i], retrain_dates[i + 1])
+            agent_track.learn(track_train_timesteps)
+
+    reward_memory_agent_track = env_eval.reward_memory
+    asset_memory_agent_track = [a[-1] for a in env_eval.asset_memory]
+    os.makedirs(output_path + 'env_memory', exist_ok=True)
+    env_eval.dump_memory(output_path + 'env_memory/')
+
+    yearly_return_rate = 100 * ret_agent_track / global_var.INITIAL_BALANCE \
+                         / (util.get_year_diff(global_var.EVAL_START_DATE, global_var.EVAL_END_DATE) + 1)
+    print('RunAgent:',
+          'Track trained agent average return {:.2f}, yearly return rate {:.2f}%'.format(ret_agent_track,
+                                                                                         yearly_return_rate))
+
+    ###################### Original Model Perf (No Track Train) ######################
+    env_eval.reset()
+    agent_original = agent_factory(agent_name, env_eval)
+    agent_original.load(base_model_path)
+    # agent_original.eval_mode()
+    total_rewards = 0
+    state = env_eval.reset()
+    while True:
+        action = agent_original.act(state)
+        next_state, reward, done, _ = env_eval.step(action)
+        state = next_state
+        total_rewards += reward
+        if done:
+            ret_agent_original = total_rewards / global_var.REWARD_SCALING
+            reward_memory_agent_original = env_eval.reward_memory
+            asset_memory_agent_original = [a[-1] for a in env_eval.asset_memory]
+            break
+
+    yearly_return_rate = 100 * ret_agent_original / global_var.INITIAL_BALANCE\
+                         / (util.get_year_diff(global_var.EVAL_START_DATE, global_var.EVAL_END_DATE) + 1)
+    print('RunAgent:', 'Original agent average return {:.2f}, yearly return rate {:.2f}%'.format(ret_agent_original,
+                                                                                                 yearly_return_rate))
+
+    ###################### Baseline Perf (Hold Agent) ######################
+    env_eval.reset()
+    baseline_agent = agent_factory('Hold', env_eval)
+    total_rewards = 0
+
+    state = env_eval.reset()
+    while True:
+        action = baseline_agent.act(state)
+        next_state, reward, done, _ = env_eval.step(action)
+        state = next_state
+        total_rewards += reward
+        if done:
+            ret_baseline = total_rewards / global_var.REWARD_SCALING
+            reward_memory_baseline = env_eval.reward_memory
+            asset_memory_baseline = [a[-1] for a in env_eval.asset_memory]
+            break
+
+    yearly_return_rate = 100 * ret_baseline / global_var.INITIAL_BALANCE\
+                         / (util.get_year_diff(global_var.EVAL_START_DATE, global_var.EVAL_END_DATE) + 1)
+    print('RunAgent:', 'Baseline average return {:.2f}, yearly return rate {:.2f}%'.format(ret_baseline,
+                                                                                           yearly_return_rate))
+
+    dates = [datetime.strptime(str(d), '%Y%m%d').date() for d in env_eval.full_dates][:-1]
+
+    util.plot_daily_multi_y(x=dates, ys=[asset_memory_agent_track, asset_memory_agent_original, asset_memory_baseline],
+                            ys_label=[agent_name + f'(Track Step={track_train_timesteps})', agent_name + '(No Track Train)',
+                                      'Hold(Baseline)'],
+                            save_path=output_path + 'total_assets_compare.png')
+    util.plot_daily_multi_y(x=dates,
+                            ys=[reward_memory_agent_track, reward_memory_agent_original, reward_memory_baseline],
+                            ys_label=[agent_name + f'(Track Step={track_train_timesteps})', agent_name + '(No Track Train)',
+                                      'Hold(Baseline)'],
+                            save_path=output_path + 'daily_reward_compare.png')
+
+    return ret_agent_track
+
+
 def track_train_agent_ntimes(data: pd.DataFrame, agent_name: str, track_train_timesteps: int,
                              base_model_path: str, n_train: int = 10):
     """
@@ -295,7 +411,6 @@ def track_train_agent_ntimes(data: pd.DataFrame, agent_name: str, track_train_ti
     :param base_model_path: 基础模型文件路径
     :param n_train: 重复训练次数
     """
-
     if global_var.VERBOSE:
         print('RunAgent:', f'track train {agent_name} agent on eval period for {n_train} times, timesteps {track_train_timesteps}. '
                            f'Load base model from {base_model_path}')
@@ -310,7 +425,7 @@ def track_train_agent_ntimes(data: pd.DataFrame, agent_name: str, track_train_ti
     retrain_dates = util.get_quarter_dates(global_var.EVAL_START_DATE,
                                            int(datetime.strftime(
                                                datetime.strptime(str(global_var.EVAL_END_DATE), '%Y%m%d') + relativedelta(days=1),
-                                           '%Y%m%d')))
+                                               '%Y%m%d')))
 
     returns = []
     for e in range(n_train):
@@ -331,10 +446,9 @@ def track_train_agent_ntimes(data: pd.DataFrame, agent_name: str, track_train_ti
             if not env_train.check_interval_valid(retrain_dates[i], retrain_dates[i + 1]):
                 # print(f'Quarter {retrain_dates[i]} to {retrain_dates[i+1]} has no data, therefore skipped.')
                 continue
-
             # perform trading on the next quarter
             agent.eval_mode()
-            env_eval.reset_date(retrain_dates[i], retrain_dates[i+1], is_last_section=(i==len(retrain_dates)-2))
+            env_eval.reset_date(retrain_dates[i], retrain_dates[i+1], is_last_section=(i == len(retrain_dates)-2))
             # 多个分段间状态连续，不能用eval_agent_simple否则会在分段处重置回初始状态
             total_rewards = 0
             while True:
@@ -364,137 +478,3 @@ def track_train_agent_ntimes(data: pd.DataFrame, agent_name: str, track_train_ti
     print('RunAgent:',
           'total {} training, average return {:.2f}, std {:.2f},'
           ' yearly return rate {:.2f}%'.format(n_train, return_mean, return_std, yearly_return_rate))
-
-
-def track_train_agent(data: pd.DataFrame, agent_name: str, track_train_timesteps: int,
-                      base_model_path: str, output_path: str) -> float:
-    """
-    在一个基础预训练模型的基础上，在测试集上每完成一个季度的交易后使用该段时间上的数据继续训练该模型，使模型能追踪近期趋势。
-    训练+测试一次，输出历史状态以及追踪训练的Agent和不进行追踪训练以及基线的资产曲线对比图
-
-    :param data: 预处理后的完整股票数据
-    :param agent_name: Agent名称，目前可选：'Dumb', 'Hold', 'A2C', 'PPO'
-    :param track_train_timesteps: 模型在每个时间窗口上继续训练的交互步数
-    :param base_model_path: 基础模型文件路径
-    :param output_path: 图表输出路径
-    :return: 模型在环境中完成一轮交易的收益金额
-    """
-
-    if global_var.VERBOSE:
-        print('RunAgent:', f'track train {agent_name} agent on eval period, timesteps {track_train_timesteps}. '
-                           f'Load base model from {base_model_path}, outputing eval result at {output_path}')
-
-    if not os.path.isfile(base_model_path):
-        raise ValueError('Specified base model file does not exist')
-
-    data_train = pp.subdata_by_range(data, global_var.TRAIN_START_DATE, global_var.TRAIN_END_DATE)
-    data_eval = pp.subdata_by_range(data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
-
-    os.makedirs(output_path, exist_ok=True)
-
-    ###################### Track Trained Model Perf ######################
-    retrain_dates = util.get_quarter_dates(global_var.EVAL_START_DATE,
-                                           int(datetime.strftime(global_var.EVAL_END_DATE + relativedelta(days=1), '%Y%m%d')))
-
-    env_train = get
-    env_eval = StockEvalEnvV2(data_eval, verbose=0)
-
-    # load a pre-trained model
-    agent_track = agent_factory(agent_name, env_train)
-
-    # agent.load() will clear out the env so that the agent can't learn anymore
-    # therefore use set_parameters() to load the model
-    agent_track.model.set_parameters(model_path)
-
-    state = env_eval.reset()
-    ret_agent_track = 0
-
-    for i in range(len(retrain_dates) - 1):
-        # print('RunAgent:', '=================================new quarter=====================================')
-        # perform trading on the next quarter
-        if not env_train.check_interval_valid(retrain_dates[i], retrain_dates[i + 1]):
-            # the quarter has no data, so we shouldn't test or train the model on it.
-            # print(f'Quarter {retrain_dates[i]} to {retrain_dates[i + 1]} has no data, therefore skipped.')
-            continue
-        total_rewards = 0
-        reseted_dates = env_eval.reset_date(retrain_dates[i], retrain_dates[i + 1],
-                                            is_last_section=(i == len(retrain_dates) - 2))
-        while True:
-            action = agent_track.act(state)
-            next_state, reward, done, _ = env_eval.step(action)
-            state = next_state
-            total_rewards += reward
-            if done:
-                ret_agent_track += total_rewards / global_var.REWARD_SCALING
-                # print(f'Quarter {retrain_dates[i]} to {retrain_dates[i + 1]} done. traded dates: {reseted_dates}')
-                break
-        # print('RunAgent:', f'quarter {retrain_dates[i]} to {retrain_dates[i+1]} ended, current return {ret_agent}. Training on its data.')
-        # continue training on the quarter's data after trading
-        if i != len(retrain_dates) - 2:
-            env_train.reset_date(retrain_dates[i], retrain_dates[i + 1])
-            agent_track.learn(track_train_timesteps)
-    reward_memory_agent_track = env_eval.reward_memory
-    asset_memory_agent_track = [a[-1] for a in env_eval.asset_memory]
-    os.makedirs(output_path + 'env_memory', exist_ok=True)
-    env_eval.dump_memory(output_path + 'env_memory/')
-
-    print('RunAgent:',
-          'Track trained agent average return {:.2f}, yearly return rate {:.2f}%'.format(ret_agent_track,
-                                                                                         100 * ret_agent_track / 4 / global_var.INITIAL_BALANCE))
-
-    ###################### Original Model Perf (No Track Train) ######################
-    while True:
-        env_eval = StockEvalEnvV2(data_eval, stock_codes, verbose=False)
-        original_agent = agent_factory(agent_name, env_eval)
-        original_agent.load(model_path)
-
-        total_rewards = 0
-        reward_memory_original_agent = []
-        asset_memory_original_agent = []
-        state = env_eval.reset()
-        while True:
-            action = original_agent.act(state)
-            next_state, reward, done, _ = env_eval.step(action)
-            state = next_state
-            total_rewards += reward
-            if done:
-                ret_original_agent = total_rewards / global_var.REWARD_SCALING
-                reward_memory_original_agent = env_eval.reward_memory
-                asset_memory_original_agent = [a[-1] for a in env_eval.asset_memory]
-                break
-        print('RunAgent:', 'Original agent average return {:.2f}, yearly return rate {:.2f}%'.format(ret_original_agent,
-                                                                                                     100 * ret_original_agent / 4 / global_var.INITIAL_BALANCE))
-        if ret_original_agent > 900000: break
-
-    ###################### Baseline Perf (Hold Agent) ######################
-    env_eval = StockEvalEnvV2(data_eval, stock_codes, verbose=False)
-    baseline_agent = agent_factory('Hold', env_eval)
-    total_rewards = 0
-
-    state = env_eval.reset()
-    while True:
-        action = baseline_agent.act(state)
-        next_state, reward, done, _ = env_eval.step(action)
-        state = next_state
-        total_rewards += reward
-        if done:
-            ret_baseline = total_rewards / global_var.REWARD_SCALING
-            reward_memory_baseline = env_eval.reward_memory
-            asset_memory_baseline = [a[-1] for a in env_eval.asset_memory]
-            break
-    print('RunAgent:', 'Baseline average return {:.2f}, yearly return rate {:.2f}%'.format(ret_baseline,
-                                                                                           100 * ret_baseline / 4 / global_var.INITIAL_BALANCE))
-
-    dates = [datetime.strptime(str(d), '%Y%m%d').date() for d in env_eval.full_dates][:-1]
-
-    util.plot_daily_multi_y(x=dates, ys=[asset_memory_agent_track, asset_memory_original_agent, asset_memory_baseline],
-                            ys_label=[agent_name + f'(Track Step={track_train_timesteps})', agent_name + '(No Track Train)',
-                                      'Hold(Baseline)'],
-                            save_path=output_path + 'total_assets_compare.png')
-    util.plot_daily_multi_y(x=dates,
-                            ys=[reward_memory_agent_track, reward_memory_original_agent, reward_memory_baseline],
-                            ys_label=[agent_name + f'(Track Step={track_train_timesteps})', agent_name + '(No Track Train)',
-                                      'Hold(Baseline)'],
-                            save_path=output_path + 'daily_reward_compare.png')
-
-    return ret_agent_track

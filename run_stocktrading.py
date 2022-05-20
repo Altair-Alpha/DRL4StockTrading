@@ -1,6 +1,3 @@
-import time
-import global_var
-import util
 from preprocessor import *
 from run_agents import *
 
@@ -33,22 +30,22 @@ if __name__ == '__main__':
     # ppo_model_path = './models/EnvV2/PPO/0308_PPO_2M_10_Train/7.zip'
     # output_path = './figs/simulation/EnvV2_A2C_2M_Track_10K_Eval/'
 
-    # train_agent_ntimes(preprocessed_stock_data, 'A2C', 100000, 10, 1)
-    track_train_agent_ntimes(preprocessed_stock_data, 'A2C', 25000, './models/EnvV2/CYB_Data/0407_A2C_2M_10_Train/9.zip', n_train=10)
-    # track_train_agent(preprocessed_stock_data, 'PPO', 25000, '')
+    # train_agent_ntimes(preprocessed_stock_data, 'A2C', 1000000, 10, model_save_path='./models/EnvV2/CYB_Data/0416/')
+    # track_train_agent_ntimes(preprocessed_stock_data, 'A2C', 5000, './models/EnvV2/CYB_Data/0407_A2C_2M_10_Train/9.zip', n_train=10)
+    # track_train_agent(remove_anomaly(preprocessed_stock_data), 'PPO', 10000, './models/EnvV2/PPO/0308_PPO_2M_10_Train/7.zip', './figs/simulation/EnvV2_PPO_2M_Track_10K_Eval/')
 
-    # data_eval = pp.subdata_by_range(preprocessed_stock_data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
+    # data_eval = remove_anomaly(subdata_by_range(preprocessed_stock_data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE))
     # env = StockEvalEnvV2(data_eval, 0)
     # agent = PPOAgent(env)
-    # agent.load('./models/EnvV2/CYB_Data/0409_PPO_2M_10_Train/6.zip')
+    # agent.load('./models/EnvV2/PPO/0308_PPO_2M_10_Train/7.zip')
     # agent.eval_mode()
-    # # eval_agent(agent, env, './figs/simulation/CYB_PPO_2M_Eval/')
+    # eval_agent_simple(agent, env)
     # print(eval_agent_simple(agent, env))
-    # data_eval = pp.subdata_by_range(preprocessed_stock_data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
+    # data_eval = subdata_by_range(preprocessed_stock_data, global_var.EVAL_START_DATE, global_var.EVAL_END_DATE)
     # env = StockEvalEnvV2(data_eval, verbose=0)
-    # # agent = PPOAgent(env)
+    # # # agent = PPOAgent(env)
     # rets = []
-    # agent.load(f'./models/EnvV2/CYB_Data/0409_PPO_2M_10_Train/6.zip')
+    # # agent.load(f'./models/EnvV2/CYB_Data/0409_PPO_2M_10_Train/6.zip')
     # for _ in range(10):
     #     ret = eval_agent_simple(agent, env)
     #     print(ret)
@@ -56,7 +53,7 @@ if __name__ == '__main__':
     # print('avg', np.mean(rets), 'std', np.std(rets), 'yearly', np.mean(rets) / global_var.INITIAL_BALANCE * 100 / 4)
     # agent = A2CAgent(env)
     # for i in range(10):
-    #     agent.load(f'./models/EnvV2/CYB_Data/0407_A2C_2M_10_Train/{i+1}.zip')
+    #     agent.load(f'./models/EnvV2/CYB_Data/0407_A2C_1M_10_Train/{i+1}.zip')
     #     agent.eval_mode()
     #     ret = eval_agent_simple(agent, env)
     #     print(f'Model {i+1}:', ret)
@@ -65,11 +62,6 @@ if __name__ == '__main__':
 
 
     # track_train_agent_ntimes(data, 'A2C', 5000, './models/EnvV2/CYB_Data/0407_A2C_2M_10_Train/9.zip', n_train=1)
-    # run_agent_test(remove_anomaly(preprocessed_stock_data))
-    # for i in range(10):
-    #     print(f'Model {i+1}')
-    #     eval_agent_train(remove_anomaly(preprocessed_stock_data), x=i+1)
-    # run_agent_keep_train(remove_anomaly(preprocessed_stock_data))
 
     # eval_agent(remove_anomaly(preprocessed_stock_data))
     # eval_track_train_agent(remove_anomaly(preprocessed_stock_data))

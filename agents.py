@@ -2,10 +2,6 @@ import numpy as np
 import gym
 
 from stable_baselines3 import A2C, PPO
-# from stable_baselines3 import TD3, SAC
-# from stable_baselines3.common.noise import NormalActionNoise
-# from stable_baselines3.common.monitor import Monitor
-# from stable_baselines3.common.env_util import make_vec_env
 
 import global_var
 
@@ -81,9 +77,9 @@ class HoldAgent(Agent):
             action_adjusted = 1 / stock_dim / global_var.EVAL_MAX_PERCENTAGE_PER_TRADE
             action = np.array([action_adjusted for _ in range(stock_dim)])
 
-            single_stock_budget = global_var.INITIAL_BALANCE * global_var.EVAL_MAX_PERCENTAGE_PER_TRADE * action_adjusted
-            print('HoldAgent:', f'day 0, {stock_dim} stocks,'
-                                f' single stock budget {single_stock_budget}')
+            # single_stock_budget = global_var.INITIAL_BALANCE * global_var.EVAL_MAX_PERCENTAGE_PER_TRADE * action_adjusted
+            # print('HoldAgent:', f'day 0, {stock_dim} stocks,'
+            #                     f' single stock budget {single_stock_budget}')
             self.is_first_day = False
 
         return action
@@ -250,8 +246,4 @@ def agent_factory(agent_name: str, env) -> Agent:
         return PPOAgent(env)
     elif agent_name == 'A2C':
         return A2CAgent(env)
-    # elif agent_name == 'TD3':
-    #     return TD3Agent(env)
-    # elif agent_name == 'SAC':
-    #     return SACAgent(env)
     raise ValueError('所需Agent未定义')

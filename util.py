@@ -57,8 +57,8 @@ def plot_daily(x: list, y: list, path: str = None):
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
     interval = np.clip(len(x) // 12, 1, 200)  # 调整横轴日期间距，避免过挤
     plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=interval))
-    # plt.xlabel('Date')
-    # plt.ylabel('TotalAsset')
+    plt.xlabel('Date')
+    plt.ylabel('Stock Price')
     plt.plot(x, y, linewidth=3, color='blue')
     plt.gcf().autofmt_xdate()
     plt.ticklabel_format(style='sci', axis='y', useMathText=True)
@@ -83,12 +83,6 @@ def plot_daily_compare(x: list, y1: list, y2: list, y1_label: str = 'y1',
     :param y1_label: 第一组数据标签
     :param y2_label: 第二组数据标签
     """
-
-    ####### 临时 #######
-    if len(y2) == 0:
-        data = subdata_by_range(read_data(), 20180101, 20211231)
-        y2 = calc_daily_mean(data)[:-1]
-    ###################
 
     plt.rc('font', size=20)
     plt.figure(figsize=(30, 10))
@@ -158,7 +152,7 @@ def read_data():
     import configparser
     conf = configparser.ConfigParser()
     conf.read('./config/config.ini', encoding='utf-8')
-    stock_data_path = './data/cybstock_10_preprocessed.csv' #conf.get('path', 'preprocessed_stock_data')
+    stock_data_path = conf.get('path', 'preprocessed_stock_data')
     stock_data = pd.read_csv(stock_data_path, index_col=0)
     stock_data = remove_anomaly(stock_data)
     return stock_data
@@ -195,7 +189,7 @@ def draw_avg_stock_price(stock_data: pd.DataFrame, eval_period_only: bool = Fals
     plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=120))
     plt.plot(x, y, linewidth=3, color='blue')
     plt.gcf().autofmt_xdate()
-    plt.savefig('./figs/stock_price/avg17_2010-2021.png')
+    plt.savefig('./figs/stock_price/avg_2010-2021.png')
     plt.close()
 
 
@@ -232,7 +226,6 @@ def draw_mean_std(x: list, mean: list, std: list, log_scale: bool, path: str):
     plt.close()
 
 
-# Agent学习曲线
 def moving_average(values, window):
     """
     Smooth values by doing a moving average
@@ -244,6 +237,7 @@ def moving_average(values, window):
     return np.convolve(values, weights, 'valid')
 
 
+# 绘制Agent学习曲线
 def plot_learning_curve(in_log_path, out_path: str, title='Learning Curve'):
     """
     plot the results
@@ -266,29 +260,8 @@ def plot_learning_curve(in_log_path, out_path: str, title='Learning Curve'):
     plt.close()
 
 
-def test_sb():
-    import gym
-    from stable_baselines3 import TD3
-    from stable_baselines3.common.env_util import make_vec_env
-    env = gym.make("Pendulum-v0")
-    model = TD3("MlpPolicy", env, verbose=1)
-    model.learn(total_timesteps=10000)
-    plot_learning_curve('./models/A2C_test/tuned', './models/A2C_test/tuned/learning_curve.png')
-
-    obs = env.reset()
-    while True:
-        action, _states = model.predict(obs)
-        print('A:', action)
-        obs, rewards, dones, info = env.step(action)
-
-        # env.render()
-
-
 if __name__ == '__main__':
-    # ppo_perf = {'timesteps':    [0,         10e3,       25e3,       50e3,       10e4,       25e4,       50e4,       1e6,        2e6],
-    #             'mean':         [126418.34, 217380.32,  298220.62,  313085.22,  360852.02,  409095.19,  429844.81,  497041.50,  530048.06],
-    #             'std':          [16782.47,  52277.96,   151125.63,  155977.04,  157869.34,  69408.79,   138805.86,  143035.92,  124618.02]}
-    # draw_mean_std(ppo_perf['timesteps'], ppo_perf['mean'], ppo_perf['std'], True, './figs/simulation/PPO_2M_Eval/timesteps_log.png')
+    pass
 
     # plot_results('./models/A2C_test', './models/A2C_test/lerning_curve_smoothed.png')
     # test_sb()
@@ -300,16 +273,20 @@ if __name__ == '__main__':
     # plot_daily(get_trade_dates(data), calc_daily_mean(data))
 
     # data = read_data()
-    # dates = get_trade_dates(data)
     # data = subdata_by_range(data, 20180101, 20211231)
     # data = calc_daily_mean(data)
     # print(f'start: {data[0]}, end: {data[-1]}, rate: {(data[-1] - data[0])/data[0]*100}')
-    # # plot_daily(dates, data, './figs/stock_price/cyb10/new_avg10.png')
+    # plot_daily(dates, data, './figs/stock_price/cyb10/new_avg10.png')
     # data = to_per_stock_data(data)
+
+    # draw_avg_stock_price(data)
     # for k, v in data.items():
     #     # print('DATESLEN:', len(dates))
     #     # print('VALUELEN:', len(v['close'].tolist()))
-    #     plot_daily(dates, v['close'].tolist(), f'./figs/stock_price/cyb10/{k}.png')
+    #
+    #     plot_daily(get_trade_dates(v), v['close'].tolist(), f'./figs/stock_price/cyb10/{k}.png')
+        # plt.xlabel('Date')
+        # plt.ylabel('TotalAsset')
 
-    l = [2146769.06, 2309249.52, 1529266.00, 1107423.98, 1069376.13, 1628285.55, 2308651.76, 2706041.63, 3214475.75]
-    print('mean', np.mean(l), 'std', np.std(l))
+    # l = [2146769.06, 2309249.52, 1529266.00, 1107423.98, 1069376.13, 1628285.55, 2308651.76, 2706041.63, 3214475.75]
+    # print('mean', np.mean(l), 'std', np.std(l))

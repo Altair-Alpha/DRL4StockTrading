@@ -76,11 +76,12 @@ def subdata_by_ndays(data: pd.DataFrame, n_days: int, start_date: int = 0) -> pd
     """
     dates = list(data['trade_date'].unique())
     index = 0 if (start_date == 0) else dates.index(start_date)
-    target_dates = dates[index : index+n_days]
+    target_dates = dates[index: index + n_days]
     # print('DATES')
     # print(target_dates)
     sub_data = data[data['trade_date'].isin(target_dates)].reset_index(drop=True)
     return sub_data
+
 
 def get_stock_codes(data: pd.DataFrame) -> List[str]:
     """获取原始数据中所有股票代码的list
@@ -89,6 +90,7 @@ def get_stock_codes(data: pd.DataFrame) -> List[str]:
     """
     return list(data['ts_code'].unique())
 
+
 def get_trade_dates(data: pd.DataFrame) -> List[date]:
     """获取原始数据中所有交易日期的list
 
@@ -96,6 +98,7 @@ def get_trade_dates(data: pd.DataFrame) -> List[date]:
     """
     dates = list(data['trade_date'].unique())
     return [datetime.strptime(str(d), '%Y%m%d').date() for d in dates]
+
 
 def to_daily_data(data: pd.DataFrame) -> Dict[int, pd.DataFrame]:
     """将所有股票所有日期的DataFrame分割为日期为键，当日所有股票数据DataFrame为值的字典
@@ -107,6 +110,7 @@ def to_daily_data(data: pd.DataFrame) -> Dict[int, pd.DataFrame]:
         v.reset_index(inplace=True)
     return daily_data
 
+
 def to_per_stock_data(data: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     """将所有股票所有日期的DataFrame分割为股票代码为键，该股票所有日期数据的DataFrame为值的字典
 
@@ -117,11 +121,12 @@ def to_per_stock_data(data: pd.DataFrame) -> Dict[str, pd.DataFrame]:
         v.reset_index(inplace=True)
     return per_stock_data
 
+
 def remove_anomaly(data: pd.DataFrame) -> pd.DataFrame:
     """茅台600519.SH，片仔癀600436.SH和山西汾酒600809.SH三只股票近10年涨幅过高，此函数从原数据中去除这三只股票的数据。
 
     :param data: 原始数据
     """
     return data[(data['ts_code'] != '600519.SH')
-               & (data['ts_code'] != '600436.SH')
-               & (data['ts_code'] != '600809.SH')]
+                & (data['ts_code'] != '600436.SH')
+                & (data['ts_code'] != '600809.SH')]

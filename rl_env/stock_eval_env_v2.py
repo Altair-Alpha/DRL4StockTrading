@@ -49,6 +49,7 @@ class StockEvalEnvV2(gym.Env):
     def reset(self):
         self.done = False
         self.reward = 0
+        self.dates = self.full_dates
         self.cur_date = self.dates[0]
         self.last_date = self.dates[-1]
         self.day_count = 0
