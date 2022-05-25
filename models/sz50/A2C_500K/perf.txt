@@ -1,0 +1,15 @@
+Agent: test version. using A2C agent.
+reward scale 0.0001
+Agent: episode 01/10, avg return 165926.14
+Agent: episode 02/10, avg return 587830.02
+Agent: episode 03/10, avg return 260651.52
+Agent: episode 04/10, avg return 348823.39
+Agent: episode 05/10, avg return 546802.88
+Agent: episode 06/10, avg return 496018.86
+Agent: episode 07/10, avg return 216567.82
+Agent: episode 08/10, avg return 911412.57
+Agent: episode 09/10, avg return 510992.41
+Agent: episode 10/10, avg return 1000647.84
+Agent: total 10 training, average return 504567.34, std 264919.32, return rate 50.46%
+Agent: average model training time: 5.61 minutes
+Main: total time elapsed: 57.68 minutes

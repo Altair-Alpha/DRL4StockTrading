@@ -1,0 +1,15 @@
+Agent: test version. using PPO agent.
+reward scale 0.0001
+Agent: episode 01/10, avg return 1638103.62
+Agent: episode 02/10, avg return 1100002.46
+Agent: episode 03/10, avg return 2696555.25
+Agent: episode 04/10, avg return 2306006.73
+Agent: episode 05/10, avg return 1858731.40
+Agent: episode 06/10, avg return 4328446.73
+Agent: episode 07/10, avg return 1429464.72
+Agent: episode 08/10, avg return 1075518.85
+Agent: episode 09/10, avg return 1203153.47
+Agent: episode 10/10, avg return 1453438.26
+Agent: total 10 training, average return 1908942.15, std 948281.05, return rate 47.72%
+Agent: average model training time: 36.07 minutes
+Main: total time elapsed: 362.12 minutes
